@@ -222,7 +222,10 @@ export default function RoomsPage() {
 
                     {/* Actions */}
                     <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
-                      <Link href={`/book?room=${room.slug}`} className="btn btn-accent">
+                      <Link href={`/rooms/${room.slug}`} className="btn btn-primary" prefetch={true}>
+                        View Details <ChevronRight size={16} />
+                      </Link>
+                      <Link href={`/book?room=${room.slug}`} className="btn btn-accent" prefetch={true}>
                         Book This Room
                       </Link>
                       <a
@@ -232,9 +235,10 @@ export default function RoomsPage() {
                         className="btn btn-whatsapp"
                       >
                         <MessageCircle size={18} />
-                        Ask on WhatsApp
+                        WhatsApp
                       </a>
                     </div>
+
                   </div>
                 </div>
               </div>

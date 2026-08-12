@@ -193,13 +193,14 @@ export default function HomePage() {
                     {room.description}
                   </p>
                   <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                    <Link href={`/rooms/${room.slug}`} className="btn btn-outline btn-sm" style={{ flex: 1 }}>
+                    <Link href={`/rooms/${room.slug}`} className="btn btn-outline btn-sm" style={{ flex: 1 }} prefetch={true}>
                       View Details
                     </Link>
-                    <Link href={`/book?room=${room.slug}`} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
+                    <Link href={`/book?room=${room.slug}`} className="btn btn-primary btn-sm" style={{ flex: 1 }} prefetch={true}>
                       Book Now
                     </Link>
                   </div>
+
                 </div>
               </div>
             ))}
