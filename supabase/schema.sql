@@ -403,6 +403,30 @@ CREATE TRIGGER update_website_content_updated_at BEFORE UPDATE ON website_conten
 CREATE TRIGGER update_room_service_updated_at BEFORE UPDATE ON room_service_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
+-- 13. GYM SUBSCRIPTIONS
+-- =====================================================
+CREATE TABLE IF NOT EXISTS gym_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  package_id TEXT NOT NULL,
+  package_name TEXT NOT NULL,
+  package_price DECIMAL(12, 2) NOT NULL,
+  package_duration TEXT NOT NULL,
+  member_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  fitness_goals TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE gym_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public create gym_subscriptions" ON gym_subscriptions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public read gym_subscriptions" ON gym_subscriptions FOR SELECT USING (true);
+CREATE POLICY "Admin full access gym_subscriptions" ON gym_subscriptions FOR ALL USING (auth.role() = 'authenticated');
+CREATE TRIGGER update_gym_subscriptions_updated_at BEFORE UPDATE ON gym_subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =====================================================
 -- STORAGE BUCKET FOR MEDIA
 -- =====================================================
 -- Run this in the Supabase dashboard under Storage:

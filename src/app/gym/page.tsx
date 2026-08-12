@@ -1,13 +1,9 @@
-'use client';
-
-import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Dumbbell, Check, Calendar, User, Phone, Sparkles,
-  Shield, Award, Flame, HeartHandshake, Send
+  Dumbbell, Check, Flame, Award, Shield, Sparkles, ArrowRight
 } from 'lucide-react';
-import { formatPrice, generateWhatsAppURL, getTodayString } from '@/lib/utils';
+import { formatPrice } from '@/lib/utils';
 
 interface GymPackage {
   id: string;
@@ -24,7 +20,7 @@ const GYM_PACKAGES: GymPackage[] = [
     id: 'day-pass',
     name: 'Day Pass',
     price: 2000,
-    duration: 'Single Day',
+    duration: 'Single Day Access',
     badge: 'Flexible',
     features: [
       'Full Gym & Fitness Hall Access',
@@ -91,42 +87,6 @@ const GYM_PACKAGES: GymPackage[] = [
 ];
 
 export default function GymPage() {
-  const [selectedPackageId, setSelectedPackageId] = useState<string>('monthly-standard');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [startDate, setStartDate] = useState(getTodayString());
-  const [fitnessGoals, setFitnessGoals] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
-
-  const activePackage = GYM_PACKAGES.find((p) => p.id === selectedPackageId) || GYM_PACKAGES[2];
-
-  const handleSubscribeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const message = `🏋️‍♂️ *NEW GYM MEMBERSHIP SUBSCRIPTION*
-🏨 *Super E Fitness Hall & Gym Studio*
-
-📋 *Selected Package:* ${activePackage.name} (${formatPrice(activePackage.price)} / ${activePackage.duration})
-👤 *Member Name:* ${fullName.trim() || 'Valued Gym Member'}
-📱 *Phone/WhatsApp:* ${phone.trim() || 'N/A'}
-📅 *Preferred Start Date:* ${startDate}
-🎯 *Fitness Goals / Notes:* ${fitnessGoals.trim() || 'General Fitness & Aerobics'}
-
-📌 *Status:* Ready for Activation`;
-
-    const whatsappUrl = generateWhatsAppURL('09131964939', message);
-    window.open(whatsappUrl, '_blank');
-    setIsSubmitted(true);
-  };
-
-  const scrollToForm = (pkgId: string) => {
-    setSelectedPackageId(pkgId);
-    const formElement = document.getElementById('subscription-form');
-    if (formElement) {
-      formElement.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
     <>
       {/* Hero Section */}
@@ -166,13 +126,12 @@ export default function GymPage() {
             </p>
 
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => scrollToForm('monthly-standard')}
+              <Link
+                href="/gym/subscribe?package=monthly-standard"
                 className="btn btn-accent btn-lg"
-                style={{ cursor: 'pointer' }}
               >
                 <Flame size={20} /> Subscribe to Gym Package
-              </button>
+              </Link>
               <a
                 href="#packages"
                 className="btn btn-outline btn-lg"
@@ -278,7 +237,7 @@ export default function GymPage() {
           <div style={{ textAlign: 'center', maxWidth: '650px', margin: '0 auto var(--space-2xl)' }}>
             <h2 className="section-title">Gym Membership Subscription Packages</h2>
             <p className="section-subtitle">
-              Select your preferred fitness package below and subscribe instantly via WhatsApp.
+              Choose your preferred fitness package below to open the dedicated subscription checkout page.
             </p>
           </div>
 
@@ -286,202 +245,67 @@ export default function GymPage() {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))',
             gap: '1.5rem',
-            marginBottom: 'var(--space-2xl)',
           }}>
-            {GYM_PACKAGES.map((pkg) => {
-              const isSelected = selectedPackageId === pkg.id;
-              return (
-                <div
-                  key={pkg.id}
-                  onClick={() => setSelectedPackageId(pkg.id)}
-                  style={{
-                    background: isSelected ? 'var(--color-surface)' : 'var(--color-surface)',
-                    borderRadius: 'var(--radius-xl)',
-                    padding: '1.75rem',
-                    border: isSelected ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-                    boxShadow: isSelected ? '0 10px 25px -5px rgba(234, 179, 8, 0.25)' : 'var(--shadow-sm)',
-                    position: 'relative',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  {pkg.badge && (
-                    <span style={{
-                      position: 'absolute',
-                      top: '1rem',
-                      right: '1rem',
-                      background: pkg.popular ? 'var(--color-accent)' : 'var(--color-primary)',
-                      color: pkg.popular ? '#0F172A' : '#FFFFFF',
-                      fontSize: '0.7rem',
-                      fontWeight: 800,
-                      padding: '0.25rem 0.65rem',
-                      borderRadius: '50px',
-                      textTransform: 'uppercase',
-                    }}>
-                      {pkg.badge}
-                    </span>
-                  )}
+            {GYM_PACKAGES.map((pkg) => (
+              <div
+                key={pkg.id}
+                style={{
+                  background: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-xl)',
+                  padding: '1.75rem',
+                  border: pkg.popular ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
+                  boxShadow: pkg.popular ? '0 10px 25px -5px rgba(234, 179, 8, 0.25)' : 'var(--shadow-sm)',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
+                {pkg.badge && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    background: pkg.popular ? 'var(--color-accent)' : 'var(--color-primary)',
+                    color: pkg.popular ? '#0F172A' : '#FFFFFF',
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    padding: '0.25rem 0.65rem',
+                    borderRadius: '50px',
+                    textTransform: 'uppercase',
+                  }}>
+                    {pkg.badge}
+                  </span>
+                )}
 
-                  <div>
-                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.25rem' }}>{pkg.name}</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>{pkg.duration}</p>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.25rem' }}>{pkg.name}</h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>{pkg.duration}</p>
 
-                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--color-accent)', marginBottom: '1.25rem' }}>
-                      {formatPrice(pkg.price)}
-                    </div>
-
-                    <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      {pkg.features.map((feat, idx) => (
-                        <li key={idx} style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Check size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--color-accent)', marginBottom: '1.25rem' }}>
+                    {formatPrice(pkg.price)}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      scrollToForm(pkg.id);
-                    }}
-                    className={isSelected ? 'btn btn-accent' : 'btn btn-outline'}
-                    style={{ width: '100%', justifyContent: 'center' }}
-                  >
-                    {isSelected ? '✓ Selected Package' : 'Select Package'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Interactive Subscription Form sending to WhatsApp */}
-          <div
-            id="subscription-form"
-            style={{
-              maxWidth: '680px',
-              margin: '0 auto',
-              background: 'var(--color-surface)',
-              border: '2px solid var(--color-accent)',
-              borderRadius: 'var(--radius-xl)',
-              padding: '2rem',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ borderBottom: '1px solid var(--color-border-light)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase' }}>
-                Instant Gym Membership Form
-              </span>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.2rem' }}>
-                Subscribe to {activePackage.name} ({formatPrice(activePackage.price)})
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>
-                Fill in your details below. Your membership registration will be sent directly to our reception team on WhatsApp for quick confirmation.
-              </p>
-            </div>
-
-            {isSubmitted && (
-              <div style={{ padding: '1rem', background: '#10B981', color: '#FFFFFF', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', fontSize: '0.875rem', fontWeight: 700, textAlign: 'center' }}>
-                🎉 Opening WhatsApp! Your gym subscription request is ready to send.
-              </div>
-            )}
-
-            <form onSubmit={handleSubscribeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
-                  Full Name *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <User size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Enter your full name"
-                    className="input"
-                    style={{ paddingLeft: '2.75rem' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
-                  WhatsApp Phone Number *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Phone size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="08012345678"
-                    className="input"
-                    style={{ paddingLeft: '2.75rem' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                <div>
-                  <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
-                    Selected Gym Package
-                  </label>
-                  <select
-                    value={selectedPackageId}
-                    onChange={(e) => setSelectedPackageId(e.target.value)}
-                    className="input"
-                    style={{ background: 'var(--color-background)', cursor: 'pointer' }}
-                  >
-                    {GYM_PACKAGES.map((pkg) => (
-                      <option key={pkg.id} value={pkg.id}>
-                        {pkg.name} — {formatPrice(pkg.price)} ({pkg.duration})
-                      </option>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {pkg.features.map((feat, idx) => (
+                      <li key={idx} style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Check size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+                        <span>{feat}</span>
+                      </li>
                     ))}
-                  </select>
+                  </ul>
                 </div>
 
-                <div>
-                  <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
-                    Preferred Start Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="input"
-                  />
-                </div>
+                <Link
+                  href={`/gym/subscribe?package=${pkg.id}`}
+                  className={pkg.popular ? 'btn btn-accent' : 'btn btn-outline'}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  prefetch={true}
+                >
+                  Subscribe Now <ArrowRight size={16} />
+                </Link>
               </div>
-
-              <div>
-                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
-                  Fitness Goals / Special Notes (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  value={fitnessGoals}
-                  onChange={(e) => setFitnessGoals(e.target.value)}
-                  placeholder="e.g. Weight loss, cardio, group aerobics, personal trainer guidance..."
-                  className="input"
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-accent btn-lg"
-                style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem', fontWeight: 800 }}
-              >
-                <Send size={20} /> Subscribe & Send to WhatsApp
-              </button>
-            </form>
+            ))}
           </div>
 
         </div>
