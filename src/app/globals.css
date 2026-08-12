@@ -583,6 +583,10 @@ img {
   background: var(--color-primary-light);
 }
 
+.mobile-cta-bar .cta-fitness {
+  background: #0284C7;
+}
+
 .mobile-cta-bar .cta-whatsapp {
   background: var(--color-whatsapp-dark);
 }
