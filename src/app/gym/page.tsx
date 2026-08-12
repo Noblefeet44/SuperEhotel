@@ -1,9 +1,13 @@
+'use client';
+
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Dumbbell, Check, Flame, Award, Shield, Sparkles, ArrowRight
+  Dumbbell, Check, Flame, Award, Shield, Sparkles, X,
+  User, Phone, Calendar, Send
 } from 'lucide-react';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, generateWhatsAppURL, getTodayString } from '@/lib/utils';
 
 interface GymPackage {
   id: string;
@@ -87,6 +91,43 @@ const GYM_PACKAGES: GymPackage[] = [
 ];
 
 export default function GymPage() {
+  const [selectedPackage, setSelectedPackage] = useState<GymPackage | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [startDate, setStartDate] = useState(getTodayString());
+  const [fitnessGoals, setFitnessGoals] = useState('');
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const openPackageModal = (pkg: GymPackage) => {
+    setSelectedPackage(pkg);
+    setIsSubmitted(false);
+  };
+
+  const closeModal = () => {
+    setSelectedPackage(null);
+    setIsSubmitted(false);
+  };
+
+  const handleSubscribeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPackage) return;
+
+    const message = `🏋️‍♂️ *NEW GYM MEMBERSHIP SUBSCRIPTION*
+🏨 *Super E Fitness Hall & Gym Studio*
+
+📋 *Selected Package:* ${selectedPackage.name} (${formatPrice(selectedPackage.price)} / ${selectedPackage.duration})
+👤 *Member Name:* ${fullName.trim() || 'Valued Gym Member'}
+📱 *Phone/WhatsApp:* ${phone.trim() || 'N/A'}
+📅 *Preferred Start Date:* ${startDate}
+🎯 *Fitness Goals / Notes:* ${fitnessGoals.trim() || 'General Fitness & Aerobics'}
+
+📌 *Status:* Ready for Activation`;
+
+    const whatsappUrl = generateWhatsAppURL('09131964939', message);
+    window.open(whatsappUrl, '_blank');
+    setIsSubmitted(true);
+  };
+
   return (
     <>
       {/* Hero Section */}
@@ -126,12 +167,13 @@ export default function GymPage() {
             </p>
 
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <Link
-                href="/gym/subscribe?package=monthly-standard"
+              <button
+                onClick={() => openPackageModal(GYM_PACKAGES[2])}
                 className="btn btn-accent btn-lg"
+                style={{ cursor: 'pointer' }}
               >
                 <Flame size={20} /> Subscribe to Gym Package
-              </Link>
+              </button>
               <a
                 href="#packages"
                 className="btn btn-outline btn-lg"
@@ -237,7 +279,7 @@ export default function GymPage() {
           <div style={{ textAlign: 'center', maxWidth: '650px', margin: '0 auto var(--space-2xl)' }}>
             <h2 className="section-title">Gym Membership Subscription Packages</h2>
             <p className="section-subtitle">
-              Choose your preferred fitness package below to open the dedicated subscription checkout page.
+              Click on any package below to open the instant subscription form pop-up.
             </p>
           </div>
 
@@ -249,6 +291,7 @@ export default function GymPage() {
             {GYM_PACKAGES.map((pkg) => (
               <div
                 key={pkg.id}
+                onClick={() => openPackageModal(pkg)}
                 style={{
                   background: 'var(--color-surface)',
                   borderRadius: 'var(--radius-xl)',
@@ -259,6 +302,8 @@ export default function GymPage() {
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                 }}
               >
                 {pkg.badge && (
@@ -296,20 +341,203 @@ export default function GymPage() {
                   </ul>
                 </div>
 
-                <Link
-                  href={`/gym/subscribe?package=${pkg.id}`}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPackageModal(pkg);
+                  }}
                   className={pkg.popular ? 'btn btn-accent' : 'btn btn-outline'}
-                  style={{ width: '100%', justifyContent: 'center' }}
-                  prefetch={true}
+                  style={{ width: '100%', justifyContent: 'center', cursor: 'pointer' }}
                 >
-                  Subscribe Now <ArrowRight size={16} />
-                </Link>
+                  Subscribe Now
+                </button>
               </div>
             ))}
           </div>
 
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════
+          SUBSCRIPTION POP-UP MODAL
+          ═══════════════════════════════════════════ */}
+      {selectedPackage && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 999,
+          background: 'rgba(15, 23, 42, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          overflowY: 'auto',
+        }}>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '580px',
+            background: 'var(--color-surface)',
+            borderRadius: 'var(--radius-xl)',
+            border: '2px solid var(--color-accent)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            padding: '1.75rem',
+            margin: 'auto',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+          }}>
+            {/* Close Button */}
+            <button
+              onClick={closeModal}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div style={{ borderBottom: '1px solid var(--color-border-light)', paddingBottom: '1rem', marginBottom: '1.25rem', paddingRight: '2rem' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Instant Gym Membership Subscription
+              </span>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.2rem', color: 'var(--color-text)' }}>
+                {selectedPackage.name}
+              </h3>
+              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--color-accent)', marginTop: '0.2rem' }}>
+                {formatPrice(selectedPackage.price)} <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>/ {selectedPackage.duration}</span>
+              </div>
+            </div>
+
+            {isSubmitted && (
+              <div style={{ padding: '1rem', background: '#10B981', color: '#FFFFFF', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', fontSize: '0.875rem', fontWeight: 700, textAlign: 'center' }}>
+                🎉 Launching WhatsApp! Your subscription request is ready to send.
+              </div>
+            )}
+
+            <form onSubmit={handleSubscribeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+              <div>
+                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
+                  Select Package
+                </label>
+                <select
+                  value={selectedPackage.id}
+                  onChange={(e) => {
+                    const p = GYM_PACKAGES.find(item => item.id === e.target.value);
+                    if (p) setSelectedPackage(p);
+                  }}
+                  className="input"
+                  style={{ background: 'var(--color-background)', cursor: 'pointer' }}
+                >
+                  {GYM_PACKAGES.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} — {formatPrice(pkg.price)} ({pkg.duration})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
+                  Full Name *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <User size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="input"
+                    style={{ paddingLeft: '2.75rem' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
+                  WhatsApp Phone Number *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Phone size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="08012345678"
+                    className="input"
+                    style={{ paddingLeft: '2.75rem' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
+                  Preferred Start Date *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', display: 'block' }}>
+                  Fitness Goals / Special Notes (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={fitnessGoals}
+                  onChange={(e) => setFitnessGoals(e.target.value)}
+                  placeholder="e.g. Weight loss, cardio, group aerobics, personal trainer..."
+                  className="input"
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="btn btn-outline"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-accent"
+                  style={{ flex: 2, justifyContent: 'center', fontWeight: 800 }}
+                >
+                  <Send size={18} /> Subscribe on WhatsApp
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
