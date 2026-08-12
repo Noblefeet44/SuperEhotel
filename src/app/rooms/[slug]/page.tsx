@@ -251,8 +251,9 @@ export default async function RoomDetailPage({ params }: Props) {
                       className="btn btn-whatsapp btn-lg"
                       style={{ width: '100%', justifyContent: 'center' }}
                     >
-                      <MessageCircle size={18} /> 1-Click WhatsApp Book
+                      <MessageCircle size={18} /> Chat on WhatsApp
                     </a>
+
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>

@@ -140,12 +140,41 @@ function BookPageContent() {
     }
   };
 
+  const handleSelectRoom = (roomSlug: string) => {
+    updateField('selectedRoom', roomSlug);
+    setStep(2);
+    setTimeout(() => {
+      window.scrollTo({ top: 220, behavior: 'smooth' });
+    }, 50);
+  };
+
   const handleConfirmBooking = () => {
     const ref = generateBookingReference();
     setBookingRef(ref);
     setIsConfirmed(true);
     setStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Automatically send details to WhatsApp
+    const room = rooms.find((r) => r.slug === bookingData.selectedRoom);
+    const n = calculateNights(bookingData.checkIn, bookingData.checkOut);
+    const total = room ? room.price * n : 0;
+
+    const whatsappUrl = generateWhatsAppBookingMessage('09131964939', {
+      reference: ref,
+      guestName: bookingData.fullName,
+      phone: bookingData.phone,
+      roomName: room ? room.name : bookingData.selectedRoom,
+      checkIn: bookingData.checkIn,
+      checkOut: bookingData.checkOut,
+      numGuests: bookingData.numGuests,
+      totalAmount: total,
+      specialRequests: bookingData.specialRequests,
+    });
+
+    if (typeof window !== 'undefined') {
+      window.open(whatsappUrl, '_blank');
+    }
   };
 
   const getWhatsAppBookingURL = () => {
@@ -162,6 +191,7 @@ function BookPageContent() {
       specialRequests: bookingData.specialRequests,
     });
   };
+
 
   const copyReference = () => {
     navigator.clipboard.writeText(bookingRef);
@@ -194,25 +224,6 @@ function BookPageContent() {
         </div>
       </section>
 
-      {/* Instant 1-Click WhatsApp Booking Banner */}
-      {!isConfirmed && (
-        <div style={{ background: '#F0FDF4', borderBottom: '1px solid #DCFCE7', padding: '0.75rem 1rem', textAlign: 'center' }}>
-          <div className="section-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
-              ⚡ Want to book in seconds?
-            </span>
-            <a
-              href={generateWhatsAppURL('09131964939', 'Hello Super E Hotel, I would like to reserve a room immediately.')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-whatsapp btn-sm"
-              style={{ borderRadius: '9999px', fontSize: '0.85rem' }}
-            >
-              <MessageCircle size={16} /> Instant 1-Click WhatsApp Booking
-            </a>
-          </div>
-        </div>
-      )}
 
 
       {/* Progress Steps */}
@@ -274,8 +285,9 @@ function BookPageContent() {
                   <button
                     key={room.slug}
                     type="button"
-                    onClick={() => updateField('selectedRoom', room.slug)}
+                    onClick={() => handleSelectRoom(room.slug)}
                     className={cn('card-static')}
+
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '120px 1fr',
