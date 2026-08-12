@@ -51,62 +51,77 @@ export function Navbar() {
 
           <div className="navbar-links">
             {NAV_LINKS.map((link) => (
-              <Link key={link.href} href={link.href}>
+              <Link key={link.href} href={link.href} prefetch={true}>
                 {link.label}
               </Link>
             ))}
-            <Link href="/book" className="btn btn-accent btn-sm">
+            <Link href="/book" className="btn btn-accent btn-sm" prefetch={true}>
               Book Now
             </Link>
           </div>
 
           <button
             className="mobile-menu-btn"
-            onClick={() => setIsMobileOpen(true)}
-            aria-label="Open menu"
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            aria-label={isMobileOpen ? 'Close menu' : 'Open menu'}
           >
-            <Menu size={24} />
+            {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Dropdown from Top */}
       {isMobileOpen && (
         <>
           <div
             className="mobile-menu-overlay"
             onClick={() => setIsMobileOpen(false)}
           />
-          <div className="mobile-menu">
-            <button
-              className="mobile-menu-close"
-              onClick={() => setIsMobileOpen(false)}
-              aria-label="Close menu"
-            >
-              <X size={24} />
-            </button>
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                {link.label}
+          <div className="mobile-menu-top">
+            <div className="mobile-menu-header">
+              <Link href="/" className="navbar-logo" prefetch={true} onClick={() => setIsMobileOpen(false)}>
+                Super E<br />
+                <span style={{ fontSize: '0.65em', fontWeight: 500, letterSpacing: '0.05em' }}>
+                  LUXURY HOTEL & SUITES
+                </span>
               </Link>
-            ))}
-            <div style={{ marginTop: '1.5rem' }}>
-              <Link
-                href="/book"
-                className="btn btn-accent"
-                style={{ width: '100%' }}
+              <button
+                className="mobile-menu-close-btn"
                 onClick={() => setIsMobileOpen(false)}
+                aria-label="Close menu"
               >
-                Book a Room
-              </Link>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="mobile-menu-nav">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="mobile-nav-item"
+                  prefetch={true}
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <div className="mobile-nav-cta">
+                <Link
+                  href="/book"
+                  className="btn btn-accent"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  prefetch={true}
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  Book a Room
+                </Link>
+              </div>
             </div>
           </div>
         </>
       )}
+
     </>
   );
 }
+

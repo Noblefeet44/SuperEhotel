@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -42,6 +42,18 @@ interface BookingData {
 }
 
 export default function BookPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: 'var(--space-4xl)', textAlign: 'center' }}>
+        <p style={{ color: 'var(--color-text-secondary)' }}>Loading booking form...</p>
+      </div>
+    }>
+      <BookPageContent />
+    </Suspense>
+  );
+}
+
+function BookPageContent() {
   const searchParams = useSearchParams();
   const preselectedRoom = searchParams.get('room') || '';
 
@@ -181,6 +193,27 @@ export default function BookPage() {
           </p>
         </div>
       </section>
+
+      {/* Instant 1-Click WhatsApp Booking Banner */}
+      {!isConfirmed && (
+        <div style={{ background: '#F0FDF4', borderBottom: '1px solid #DCFCE7', padding: '0.75rem 1rem', textAlign: 'center' }}>
+          <div className="section-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
+              ⚡ Want to book in seconds?
+            </span>
+            <a
+              href={generateWhatsAppURL('09131964939', 'Hello Super E Hotel, I would like to reserve a room immediately.')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-whatsapp btn-sm"
+              style={{ borderRadius: '9999px', fontSize: '0.85rem' }}
+            >
+              <MessageCircle size={16} /> Instant 1-Click WhatsApp Booking
+            </a>
+          </div>
+        </div>
+      )}
+
 
       {/* Progress Steps */}
       {!isConfirmed && (
