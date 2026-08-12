@@ -3,7 +3,6 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { MobileCTA } from "@/components/layout/MobileCTA";
-import { WhatsAppFloat } from "@/components/layout/WhatsAppFloat";
 
 export const viewport: Viewport = {
   themeColor: "#1E3A8A",
@@ -88,7 +87,6 @@ export default function RootLayout({
         <Navbar />
         <main>{children}</main>
         <Footer />
-        <WhatsAppFloat />
         <MobileCTA />
       </body>
     </html>

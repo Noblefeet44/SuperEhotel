@@ -3,13 +3,14 @@ import Image from 'next/image';
 import {
   MapPin, Star, Users, Bed, ChevronRight,
   Wifi, Snowflake, Tv, Droplets, Utensils, Car,
-  Shield, Zap, ConciergeBell, Shirt,
+  Shield, Zap, ConciergeBell, Shirt, Dumbbell,
   MessageCircle, Phone, ArrowRight
 } from 'lucide-react';
 import { generateWhatsAppURL, generatePhoneURL, formatPrice } from '@/lib/utils';
 
 // Icon mapping for facilities
 const facilityIcons: Record<string, React.ReactNode> = {
+  dumbbell: <Dumbbell size={24} />,
   snowflake: <Snowflake size={24} />,
   wifi: <Wifi size={24} />,
   tv: <Tv size={24} />,
@@ -332,6 +333,44 @@ export default function HomePage() {
                   Reserve a Table
                 </a>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          GYM & FITNESS PREVIEW
+          ═══════════════════════════════════════════ */}
+      <section className="section-padding" style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border-light)' }}>
+        <div className="section-container">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: 'var(--space-2xl)',
+            alignItems: 'center',
+          }}>
+            <div>
+              <p className="section-label">Fitness & Wellness</p>
+              <h2 className="section-title">State-of-the-Art Gym & Fitness Hall</h2>
+              <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+              <p className="section-description" style={{ margin: '0 0 var(--space-lg) 0', textAlign: 'left' }}>
+                Stay fit during your stay with our modern, fully equipped fitness center. Featuring top cardio equipment, free weights, certified trainers, and dedicated ladies aerobics fitness studio.
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+                <Link href="/gym" className="btn btn-accent">
+                  <Dumbbell size={18} />
+                  Explore Gym & Packages
+                </Link>
+              </div>
+            </div>
+
+            <div style={{ position: 'relative', height: '300px', borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+              <Image
+                src="/images/gym-hall.png"
+                alt="Super E Gym Fitness Hall"
+                fill
+                style={{ objectFit: 'cover' }}
+              />
             </div>
           </div>
         </div>

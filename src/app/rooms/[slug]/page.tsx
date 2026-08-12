@@ -3,10 +3,10 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import {
-  Users, Bed, Maximize, Check, ArrowRight, MessageCircle,
+  Users, Bed, Maximize, Check, ArrowRight,
   ChevronRight, Shield, Phone
 } from 'lucide-react';
-import { formatPrice, generateWhatsAppURL } from '@/lib/utils';
+import { formatPrice } from '@/lib/utils';
 
 // Static Room Data
 const ROOMS_DATA = [
@@ -103,9 +103,6 @@ export default async function RoomDetailPage({ params }: Props) {
   }
 
   const otherRooms = ROOMS_DATA.filter((r) => r.slug !== slug);
-
-  const whatsappMsg = `Hello Super E Hotel, I would like to book the *${room.name}* (₦${room.price.toLocaleString()}/night). Please let me know availability.`;
-  const whatsappUrl = generateWhatsAppURL('09131964939', whatsappMsg);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -243,17 +240,6 @@ export default async function RoomDetailPage({ params }: Props) {
                     >
                       Book Online Now <ArrowRight size={18} />
                     </Link>
-
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-whatsapp btn-lg"
-                      style={{ width: '100%', justifyContent: 'center' }}
-                    >
-                      <MessageCircle size={18} /> Chat on WhatsApp
-                    </a>
-
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>

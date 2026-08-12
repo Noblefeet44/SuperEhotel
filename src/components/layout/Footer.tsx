@@ -47,6 +47,7 @@ export function Footer() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
               <Link href="/rooms">Our Rooms</Link>
               <Link href="/restaurant">Restaurant</Link>
+              <Link href="/gym">Gym & Fitness</Link>
               <Link href="/facilities">Facilities</Link>
               <Link href="/about">About Us</Link>
               <Link href="/contact">Contact</Link>

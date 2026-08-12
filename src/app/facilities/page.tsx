@@ -1,15 +1,16 @@
 import { Metadata } from 'next';
 import {
   Wifi, Snowflake, Tv, Droplets, Utensils, Car,
-  Shield, Zap, ConciergeBell, Shirt, Star
+  Shield, Zap, ConciergeBell, Shirt, Star, Dumbbell
 } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Facilities & Amenities | Super E Luxury Hotel & Suites',
-  description: 'Explore the premium facilities and amenities at Super E Luxury Hotel, Keffi. Air conditioning, Wi-Fi, restaurant, room service, and more.',
+  description: 'Explore the premium facilities and amenities at Super E Luxury Hotel, Keffi. Air conditioning, Wi-Fi, restaurant, gym & fitness hall, room service, and more.',
 };
 
 const facilityIcons: Record<string, React.ReactNode> = {
+  dumbbell: <Dumbbell size={32} />,
   snowflake: <Snowflake size={32} />,
   wifi: <Wifi size={32} />,
   tv: <Tv size={32} />,
@@ -23,6 +24,7 @@ const facilityIcons: Record<string, React.ReactNode> = {
 };
 
 const facilities = [
+  { name: 'Gym & Fitness Center', description: 'World-class fitness hall equipped with modern cardio machines, free weights, certified coaches, and dedicated ladies aerobics studio.', icon: 'dumbbell' },
   { name: 'Air Conditioning', description: 'All rooms are fully air-conditioned with individual climate controls for your comfort throughout your stay.', icon: 'snowflake' },
   { name: 'Free Wi-Fi', description: 'Complimentary high-speed internet access available throughout the hotel, keeping you connected at all times.', icon: 'wifi' },
   { name: 'Flat Screen TV', description: 'Modern flat screen televisions in every room with access to cable channels and entertainment.', icon: 'tv' },

@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Metadata } from 'next';
-import { Users, Bed, Maximize, ChevronRight, MessageCircle } from 'lucide-react';
-import { formatPrice, generateWhatsAppURL } from '@/lib/utils';
+import { Users, Bed, Maximize, ChevronRight } from 'lucide-react';
+import { formatPrice } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Rooms & Suites | Super E Luxury Hotel & Suites',
@@ -228,15 +228,6 @@ export default function RoomsPage() {
                       <Link href={`/book?room=${room.slug}`} className="btn btn-accent" prefetch={true}>
                         Book This Room
                       </Link>
-                      <a
-                        href={generateWhatsAppURL('09131964939', `Hello! I'm interested in your ${room.name} at ${formatPrice(room.price)}/night. Is it available?`)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-whatsapp"
-                      >
-                        <MessageCircle size={18} />
-                        WhatsApp
-                      </a>
                     </div>
 
                   </div>
@@ -258,17 +249,15 @@ export default function RoomsPage() {
             Can&apos;t Decide? Let Us Help
           </h2>
           <p style={{ color: 'rgba(255, 255, 255, 0.8)', marginBottom: 'var(--space-xl)', maxWidth: '500px', margin: '0 auto var(--space-xl)' }}>
-            Contact us on WhatsApp and our team will help you choose the perfect room.
+            Contact our front desk directly and our team will help you choose the perfect room.
           </p>
-          <a
-            href={generateWhatsAppURL('09131964939', 'Hello! I need help choosing a room at Super E Luxury Hotel.')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-whatsapp btn-lg"
+          <Link
+            href="/contact"
+            className="btn btn-accent btn-lg"
+            prefetch={true}
           >
-            <MessageCircle size={20} />
-            Chat With Us
-          </a>
+            Contact Front Desk
+          </Link>
         </div>
       </section>
     </>
