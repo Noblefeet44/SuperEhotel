@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CalendarCheck, Bed, Utensils, Building2,
   Star, Settings, Image as ImageIcon, FileText, Menu, X,
-  LogOut, ChevronRight, MessageCircle,
+  LogOut, ChevronRight, MessageCircle, Dumbbell,
   UserCheck, CreditCard, Clock, AlertCircle, TrendingUp
 } from 'lucide-react';
 import { formatPrice, generateWhatsAppURL } from '@/lib/utils';
@@ -16,6 +16,7 @@ const sidebarLinks = [
   { href: '/admin/bookings', label: 'Bookings', icon: <CalendarCheck size={20} /> },
   { href: '/admin/rooms', label: 'Rooms', icon: <Bed size={20} /> },
   { href: '/admin/restaurant', label: 'Restaurant', icon: <Utensils size={20} /> },
+  { href: '/admin/gym', label: 'Gym & Fitness', icon: <Dumbbell size={20} /> },
   { href: '/admin/facilities', label: 'Facilities', icon: <Building2 size={20} /> },
   { href: '/admin/reviews', label: 'Reviews', icon: <Star size={20} /> },
   { href: '/admin/media', label: 'Media', icon: <ImageIcon size={20} /> },
