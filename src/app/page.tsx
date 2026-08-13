@@ -115,7 +115,7 @@ export default function HomePage() {
       <section className="hero">
         <Image
           src="/images/hotel-exterior.jpg"
-          alt="Super E Luxury Hotel & Suites exterior"
+          alt="Super E Luxury Hotel & Suites exterior front drone view"
           fill
           style={{ objectFit: 'cover' }}
           priority

@@ -920,6 +920,8 @@ img {
     padding: 0.3rem 0.75rem;
   }
 }
+
+.mobile-menu-close-btn {
   cursor: pointer;
   color: var(--color-text-primary);
   transition: background var(--transition-fast), color var(--transition-fast);
