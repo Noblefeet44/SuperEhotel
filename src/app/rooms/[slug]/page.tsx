@@ -4,90 +4,34 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import {
   Users, Bed, Maximize, Check, ArrowRight,
-  ChevronRight, Shield, Phone
+  ChevronRight, Shield, Phone, Sparkles, ShieldCheck, Clock
 } from 'lucide-react';
-import { formatPrice } from '@/lib/utils';
-
-// Static Room Data
-const ROOMS_DATA = [
-  {
-    slug: 'standard-room',
-    name: 'Standard Room',
-    category: 'Standard',
-    price: 25000,
-    maxGuests: 2,
-    bedType: 'Queen',
-    roomSize: '25 sqm',
-    image: '/images/standard-room.jpg',
-    description: 'Our Standard Room offers a comfortable retreat with all essential amenities. Perfect for solo travelers or couples seeking a pleasant, quiet stay in Keffi with 24/7 hot water, high-speed Wi-Fi, and climate control.',
-    facilities: ['Air Conditioning', 'Flat Screen TV', 'Free High-Speed Wi-Fi', '24/7 Hot Water', 'Wardrobe', 'Executive Desk', 'Room Service'],
-    gallery: ['/images/standard-room.jpg', '/images/hotel-exterior.jpg'],
-    highlights: ['Quiet and cozy atmosphere', 'Dedicated work desk', '24/7 Uninterrupted power supply', 'Daily housekeeping'],
-  },
-  {
-    slug: 'deluxe-room',
-    name: 'Deluxe Room',
-    category: 'Deluxe',
-    price: 40000,
-    maxGuests: 2,
-    bedType: 'King',
-    roomSize: '35 sqm',
-    image: '/images/deluxe-room.jpg',
-    description: 'Step up to our Deluxe Room for a more spacious and refined experience. Featuring premium plush furnishings, enhanced amenities, a cozy sitting area, and full climate control for an elevated luxury stay.',
-    facilities: ['Air Conditioning', 'Flat Screen TV', 'Free High-Speed Wi-Fi', '24/7 Hot Water', 'Mini Fridge', 'Wardrobe', 'Sitting Area', 'Executive Desk', 'Room Service'],
-    gallery: ['/images/deluxe-room.jpg', '/images/hotel-lobby.jpg'],
-    highlights: ['Spacious lounge area', 'Premium King size bed', 'Refrigerated refreshments', 'Express room service'],
-  },
-  {
-    slug: 'executive-room',
-    name: 'Executive Room',
-    category: 'Executive',
-    price: 60000,
-    maxGuests: 2,
-    bedType: 'King',
-    roomSize: '45 sqm',
-    image: '/images/executive-room.jpg',
-    description: 'Our Executive Room is designed for guests who demand excellence. Enjoy a sophisticated space with premium amenities, a dedicated executive workspace, luxury bath products, and priority concierge care.',
-    facilities: ['Air Conditioning', 'Flat Screen TV', 'Free High-Speed Wi-Fi', '24/7 Hot Water', 'Mini Bar', 'Refrigerator', 'Sitting Area', 'Executive Desk', 'Bathrobe', 'Complimentary Luxury Toiletries'],
-    gallery: ['/images/executive-room.jpg', '/images/hotel-exterior.jpg'],
-    highlights: ['Executive business suite desk', 'Fully stocked mini bar', 'Luxury bath robes & slippers', 'VIP concierge service'],
-  },
-  {
-    slug: 'vip-luxury-suite',
-    name: 'VIP Luxury Suite',
-    category: 'VIP Suite',
-    price: 100000,
-    maxGuests: 4,
-    bedType: 'King (Premium)',
-    roomSize: '70 sqm',
-    image: '/images/vip-suite.jpg',
-    description: 'The pinnacle of luxury at Super E Hotel. Our VIP Suite offers an expansive living room, dining area, premium furnishings, and exclusive amenities for an unforgettable royal experience in Keffi.',
-    facilities: ['Air Conditioning', 'Smart TV with Cable', 'High-Speed Wi-Fi', '24/7 Hot Water', 'Full Mini Bar', 'Refrigerator', 'Living Room', 'Dining Area', 'Executive Desk', 'Premium Bathroom', 'Bathrobe & Slippers', 'Complimentary Luxury Toiletries', 'Priority Room Service'],
-    gallery: ['/images/vip-suite.jpg', '/images/restaurant-interior.jpg'],
-    highlights: ['Separate living & dining quarters', 'Spacious master suite bed', 'Panoramic view', 'Priority 24/7 room service & VIP access'],
-  },
-];
+import { formatPrice, generatePhoneURL, generateWhatsAppURL } from '@/lib/utils';
+import { INITIAL_ROOMS_DATA, HOTEL_INFO, HOTEL_POLICIES } from '@/lib/hotel-data';
+import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
 interface Props {
   params: Promise<{ slug: string }>;
 }
 
 export async function generateStaticParams() {
-  return ROOMS_DATA.map((room) => ({
+  return INITIAL_ROOMS_DATA.map((room) => ({
     slug: room.slug,
   }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const room = ROOMS_DATA.find((r) => r.slug === slug);
+  const room = INITIAL_ROOMS_DATA.find(
+    (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
+  );
   if (!room) return { title: 'Room Not Found | Super E Luxury Hotel' };
 
   return {
-    title: `${room.name} | Super E Luxury Hotel & Suites Keffi`,
+    title: `${room.name} — ₦${room.price.toLocaleString()} | Super E Luxury Hotel & Suites Keffi`,
     description: room.description,
     openGraph: {
-      title: `${room.name} - Super E Luxury Hotel`,
+      title: `${room.name} — Super E Luxury Hotel`,
       description: room.description,
       images: [room.image],
     },
@@ -96,13 +40,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RoomDetailPage({ params }: Props) {
   const { slug } = await params;
-  const room = ROOMS_DATA.find((r) => r.slug === slug);
+  const room = INITIAL_ROOMS_DATA.find(
+    (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
+  );
 
   if (!room) {
     notFound();
   }
 
-  const otherRooms = ROOMS_DATA.filter((r) => r.slug !== slug);
+  const otherRooms = INITIAL_ROOMS_DATA.filter((r) => r.slug !== slug).slice(0, 3);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -129,30 +75,61 @@ export default async function RoomDetailPage({ params }: Props) {
       />
 
       {/* Header Banner */}
-      <section style={{
-        background: 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)',
-        paddingTop: 'calc(80px + var(--space-2xl))',
-        paddingBottom: 'var(--space-2xl)',
-      }}>
-        <div className="section-container">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+      <section
+        style={{
+          background: 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%)',
+          paddingTop: 'calc(65px + var(--space-xl))',
+          paddingBottom: 'var(--space-2xl)',
+          color: '#FFFFFF',
+        }}
+      >
+        <div className="section-container" style={{ padding: '0 1rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: '0.8rem',
+              marginBottom: '0.75rem',
+              flexWrap: 'wrap',
+            }}
+          >
             <Link href="/" style={{ color: 'rgba(255,255,255,0.8)' }}>Home</Link>
-            <ChevronRight size={14} />
+            <ChevronRight size={13} />
             <Link href="/rooms" style={{ color: 'rgba(255,255,255,0.8)' }}>Rooms</Link>
-            <ChevronRight size={14} />
+            <ChevronRight size={13} />
             <span style={{ color: '#FFFFFF' }}>{room.name}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div>
-              <span className="badge" style={{ background: 'rgba(202, 138, 4, 0.2)', color: 'var(--color-accent-light)', marginBottom: '0.5rem' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: 'rgba(202, 138, 4, 0.25)',
+                  color: 'var(--color-accent-light)',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  marginBottom: '0.35rem',
+                }}
+              >
                 {room.category}
               </span>
-              <h1 style={{ color: '#FFFFFF', margin: 0 }}>{room.name}</h1>
+              <h1 style={{ color: '#FFFFFF', margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2.25rem)' }}>
+                {room.name}
+              </h1>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-accent-light)' }}>
+
+            <div>
+              <div style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 800, color: 'var(--color-accent-light)' }}>
                 {formatPrice(room.price)}
-                <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}> / night</span>
+                <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}> / night</span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#FDE047', textAlign: 'right' }}>
+                Inclusive of 10% Service &amp; 7% VAT
               </div>
             </div>
           </div>
@@ -160,117 +137,211 @@ export default async function RoomDetailPage({ params }: Props) {
       </section>
 
       {/* Main Content Grid */}
-      <section className="section-padding">
-        <div className="section-container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-2xl)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-2xl)', alignItems: 'start' }}>
-              {/* Left Column: Image & Details */}
-              <div>
-                <div style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', height: '360px', position: 'relative', boxShadow: 'var(--shadow-lg)', marginBottom: 'var(--space-lg)' }}>
-                  <Image
-                    src={room.image}
-                    alt={room.name}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                    style={{ objectFit: 'cover' }}
-                    priority
-                  />
-                </div>
+      <section style={{ padding: 'var(--space-xl) 0', paddingBottom: 'calc(var(--space-3xl) + 60px)' }}>
+        <div className="section-container" style={{ padding: '0 1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+            {/* Left Column: Image, Amenities & Policy Checklist */}
+            <div>
+              <div style={{ borderRadius: '16px', overflow: 'hidden', marginBottom: '1rem', boxShadow: 'var(--shadow-md)' }}>
+                <RoomImageCarousel
+                  images={room.images && room.images.length > 0 ? room.images : [room.image]}
+                  fallbackImage={room.image}
+                  roomName={room.name}
+                  facilities={room.facilities}
+                  height="clamp(280px, 42vw, 440px)"
+                  showThumbnails={true}
+                  priority={true}
+                  badge={
+                    <span
+                      style={{
+                        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                        color: '#FFFFFF',
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      {room.category} Tier
+                    </span>
+                  }
+                />
+              </div>
 
-                {/* Spec Icons */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', background: 'var(--color-surface)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', marginBottom: '1.5rem' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <Users size={22} style={{ color: 'var(--color-primary)', margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Capacity</div>
-                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Up to {room.maxGuests} Guests</div>
-                  </div>
-                  <div style={{ textAlign: 'center', borderLeft: '1px solid var(--color-border-light)', borderRight: '1px solid var(--color-border-light)' }}>
-                    <Bed size={22} style={{ color: 'var(--color-primary)', margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Bed Type</div>
-                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{room.bedType}</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <Maximize size={22} style={{ color: 'var(--color-primary)', margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Room Size</div>
-                    <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{room.roomSize}</div>
-                  </div>
+              {/* Spec Icons */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '0.5rem',
+                  background: 'var(--color-surface)',
+                  padding: '0.85rem',
+                  borderRadius: '12px',
+                  border: '1px solid var(--color-border)',
+                  marginBottom: '1.25rem',
+                  textAlign: 'center',
+                }}
+              >
+                <div>
+                  <Users size={18} style={{ color: 'var(--color-primary)', margin: '0 auto 0.2rem' }} />
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Capacity</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Up to {room.maxGuests}</div>
                 </div>
+                <div style={{ borderLeft: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0' }}>
+                  <Bed size={18} style={{ color: 'var(--color-primary)', margin: '0 auto 0.2rem' }} />
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Bed Type</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{room.bedType}</div>
+                </div>
+                <div>
+                  <Maximize size={18} style={{ color: 'var(--color-primary)', margin: '0 auto 0.2rem' }} />
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Room Size</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{room.roomSize}</div>
+                </div>
+              </div>
 
-                <h3 style={{ marginBottom: '0.75rem', fontFamily: 'var(--font-heading)' }}>Overview</h3>
-                <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+              {/* Overview */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                  Room Description
+                </h3>
+                <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6, fontSize: '0.9rem' }}>
                   {room.description}
                 </p>
+              </div>
 
-                <h3 style={{ marginBottom: '1rem', fontFamily: 'var(--font-heading)' }}>Highlights</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
-                  {room.highlights.map((h, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.925rem' }}>
-                      <Check size={18} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                      <span>{h}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <h3 style={{ marginBottom: '1rem', fontFamily: 'var(--font-heading)' }}>Room Amenities</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
+              {/* Amenities */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)' }}>
+                  Included Room Amenities
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
                   {room.facilities.map((fac, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-muted)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.875rem' }}>
-                      <Check size={16} style={{ color: 'var(--color-accent)' }} />
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        background: '#F8FAFC',
+                        padding: '0.5rem 0.65rem',
+                        borderRadius: '8px',
+                        border: '1px solid #E2E8F0',
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <Check size={14} style={{ color: '#16A34A', flexShrink: 0 }} />
                       <span>{fac}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Right Column: Booking Card */}
-              <div>
-                <div style={{ position: 'sticky', top: '100px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', boxShadow: 'var(--shadow-xl)' }}>
-                  <h3 style={{ marginBottom: '0.5rem' }}>Reserve {room.name}</h3>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-accent)', marginBottom: '1.25rem' }}>
-                    {formatPrice(room.price)}
-                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 400 }}> / night</span>
-                  </div>
+              {/* Essential Hotel Policies for this stay */}
+              <div
+                style={{
+                  background: '#FEFCE8',
+                  border: '1px solid #FEF08A',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <ShieldCheck size={18} style={{ color: '#A16207' }} />
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#854D0E' }}>
+                    Important Guest Policies
+                  </h4>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.8rem', color: '#713F12', lineHeight: 1.6 }}>
+                  <li><strong>Check-out Time:</strong> Strictly 12:00 Noon. Late check-out between 12-3 PM attracts 50% charge; after 3 PM attracts 100%.</li>
+                  <li><strong>Guaranteed Booking:</strong> Reservations are confirmed only after verified payment.</li>
+                  <li><strong>5:00 PM Release:</strong> Unpaid bookings are automatically released after 5:00 PM on arrival date.</li>
+                  <li><strong>Safe Custody:</strong> All money &amp; valuables must be deposited at the front desk.</li>
+                  <li><strong>Cancellations:</strong> Cancellations under 24 hours attract a 50% surcharge.</li>
+                </ul>
+              </div>
+            </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', marginBottom: '1.5rem' }}>
-                    <Link
-                      href={`/book?room=${room.slug}`}
-                      className="btn btn-accent btn-lg"
-                      style={{ width: '100%', justifyContent: 'center' }}
-                      prefetch={true}
-                    >
-                      Book Online Now <ArrowRight size={18} />
-                    </Link>
-                  </div>
+            {/* Right Column: Mobile-first Sticky Booking Card */}
+            <div>
+              <div
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '16px',
+                  padding: '1.25rem',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.06)',
+                  position: 'sticky',
+                  top: '80px',
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Reserve this room</span>
+                <h3 style={{ margin: '0.2rem 0 0.5rem', fontSize: '1.2rem' }}>{room.name}</h3>
 
-                  <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Shield size={16} style={{ color: 'var(--color-primary)' }} />
-                      <span>Instant confirmation & 24/7 reception</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Phone size={16} style={{ color: 'var(--color-primary)' }} />
-                      <span>Direct Front Desk: 09131964939</span>
-                    </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
+                  {formatPrice(room.price)}
+                  <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 400 }}> / night</span>
+                </div>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.75rem', color: '#16A34A', fontWeight: 600 }}>
+                  ✓ 10% Service Charge &amp; 7% VAT included
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.25rem' }}>
+                  <Link
+                    href={`/book?room=${room.slug}`}
+                    className="btn btn-accent btn-block"
+                    style={{ justifyContent: 'center', fontSize: '1rem', padding: '0.85rem 1rem', fontWeight: 700 }}
+                    prefetch={true}
+                  >
+                    Reserve &amp; Pay Online <ArrowRight size={18} />
+                  </Link>
+                </div>
+
+                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.8rem', color: '#64748B' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Clock size={15} style={{ color: '#D97706' }} />
+                    <span>Check-out time: 12:00 Noon</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Shield size={15} style={{ color: '#16A34A' }} />
+                    <span>24/7 Power, Hot Water &amp; Front Desk</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Phone size={15} style={{ color: '#1E3A8A' }} />
+                    <a href={generatePhoneURL(HOTEL_INFO.hotlines[0])} style={{ color: '#1E3A8A', fontWeight: 600 }}>
+                      Hotline: {HOTEL_INFO.hotlines[0]}
+                    </a>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Other Rooms Section */}
-          <div style={{ marginTop: '4rem', paddingTop: '3rem', borderTop: '1px solid var(--color-border-light)' }}>
-            <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>Explore Other Accommodations</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          {/* Explore Other Accommodations */}
+          <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid #E2E8F0' }}>
+            <h2 style={{ textAlign: 'center', marginBottom: '1.25rem', fontSize: '1.3rem' }}>
+              Other Rooms &amp; Suites
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
               {otherRooms.map((other) => (
-                <div key={other.slug} className="card">
-                  <div style={{ height: '180px', position: 'relative' }}>
+                <div key={other.slug} className="card" style={{ borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ height: '160px', position: 'relative' }}>
                     <Image src={other.image} alt={other.name} fill style={{ objectFit: 'cover' }} sizes="300px" />
                   </div>
-                  <div style={{ padding: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>{other.name}</h3>
-                    <div style={{ fontWeight: 700, color: 'var(--color-accent)', marginBottom: '1rem' }}>{formatPrice(other.price)} / night</div>
-                    <Link href={`/rooms/${other.slug}`} className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'center' }} prefetch={true}>
-                      View Room Details
+                  <div style={{ padding: '0.85rem' }}>
+                    <h3 style={{ fontSize: '1rem', margin: '0 0 0.25rem' }}>{other.name}</h3>
+                    <div style={{ fontWeight: 700, color: 'var(--color-primary)', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
+                      {formatPrice(other.price)} / night
+                    </div>
+                    <Link
+                      href={`/rooms/${other.slug}`}
+                      className="btn btn-secondary btn-sm"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      prefetch={true}
+                    >
+                      View Details
                     </Link>
                   </div>
                 </div>

@@ -132,15 +132,9 @@ export default function AboutPage() {
               <Bed size={20} />
               Book a Room
             </Link>
-            <a
-              href={generateWhatsAppURL('09131964939', 'Hello! I would like to learn more about Super E Luxury Hotel.')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-whatsapp btn-lg"
-            >
-              <MessageCircle size={20} />
-              Contact Us
-            </a>
+            <Link href="/rooms" className="btn btn-outline-white btn-lg">
+              Explore Rooms &amp; Suites
+            </Link>
           </div>
         </div>
       </section>

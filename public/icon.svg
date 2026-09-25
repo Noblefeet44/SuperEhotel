@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E2D5F" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" />
+      <stop offset="50%" stop-color="#C6A75E" />
+      <stop offset="100%" stop-color="#926F26" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Background -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)" />
+  <rect width="496" height="496" x="8" y="8" rx="102" fill="none" stroke="url(#goldGrad)" stroke-width="8" opacity="0.6" />
+
+  <!-- Inner Gold Shield / Crest Border -->
+  <path d="M 256 60 Q 380 60 410 160 Q 410 320 256 440 Q 102 320 102 160 Q 132 60 256 60 Z"
+        fill="none" stroke="url(#goldGrad)" stroke-width="12" filter="url(#shadow)" />
+
+  <!-- Crown on Top of Crest -->
+  <path d="M 190 145 L 215 175 L 256 125 L 297 175 L 322 145 L 325 195 L 187 195 Z"
+        fill="url(#goldGrad)" />
+  <circle cx="190" cy="140" r="7" fill="#FCD34D" />
+  <circle cx="256" cy="120" r="8" fill="#FCD34D" />
+  <circle cx="322" cy="140" r="7" fill="#FCD34D" />
+
+  <!-- Luxury Monogram "E" -->
+  <text x="256" y="325"
+        text-anchor="middle"
+        font-family="'Playfair Display', Georgia, serif"
+        font-size="160"
+        font-weight="900"
+        fill="url(#goldGrad)"
+        filter="url(#shadow)">E</text>
+
+  <!-- Stars under Monogram -->
+  <g fill="url(#goldGrad)">
+    <!-- Star 1 -->
+    <polygon points="216,365 220,375 231,376 222,383 225,394 216,388 207,394 210,383 201,376 212,375" />
+    <!-- Star 2 (center) -->
+    <polygon points="256,360 260,370 271,371 262,378 265,389 256,383 247,389 250,378 241,371 252,370" />
+    <!-- Star 3 -->
+    <polygon points="296,365 300,375 311,376 302,383 305,394 296,388 287,394 290,383 281,376 292,375" />
+  </g>
+</svg>

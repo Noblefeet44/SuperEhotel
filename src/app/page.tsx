@@ -7,6 +7,7 @@ import {
   MessageCircle, Phone, ArrowRight
 } from 'lucide-react';
 import { generateWhatsAppURL, generatePhoneURL, formatPrice } from '@/lib/utils';
+import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
 // Icon mapping for facilities
 const facilityIcons: Record<string, React.ReactNode> = {
@@ -23,43 +24,83 @@ const facilityIcons: Record<string, React.ReactNode> = {
   zap: <Zap size={24} />,
 };
 
-// Static data for initial build (will be fetched from Supabase later)
+// Featured room categories with official rates and authentic photos
 const rooms = [
   {
-    slug: 'standard-room',
+    slug: 'standard',
     name: 'Standard Room',
-    price: 25000,
+    price: 36000,
     maxGuests: 2,
-    bedType: 'Queen',
+    bedType: 'Queen Bed',
     image: '/images/standard-room.jpg',
-    description: 'Comfortable and well-appointed rooms perfect for a pleasant stay.',
+    images: [
+      '/images/standard-room.jpg',
+      '/images/hotel-lobby.jpg',
+      '/images/hotel-exterior.jpg',
+    ],
+    facilities: ['Air Conditioning', 'Flat Screen TV', 'High-Speed Wi-Fi', 'Hot Water'],
+    description: 'Comfortable retreat with premium bedding, climate control AC, work desk, and essential amenities.',
   },
   {
-    slug: 'deluxe-room',
+    slug: 'deluxe',
     name: 'Deluxe Room',
-    price: 40000,
+    price: 47000,
     maxGuests: 2,
-    bedType: 'King',
+    bedType: 'King Bed',
     image: '/images/deluxe-room.jpg',
-    description: 'Spacious rooms with premium amenities for an elevated experience.',
+    images: [
+      '/images/deluxe-room.jpg',
+      '/images/deluxe-1.jpg',
+      '/images/hotel-lobby.jpg',
+    ],
+    facilities: ['Air Conditioning', 'Smart Flat Screen TV', 'Wi-Fi', 'Mini Refrigerator'],
+    description: 'Sophisticated finishes with plush king bedding, tea/coffee maker, mini-fridge, and wall-mounted TV.',
   },
   {
-    slug: 'executive-room',
-    name: 'Executive Room',
-    price: 60000,
+    slug: 'luxury',
+    name: 'Luxury Room',
+    price: 53000,
     maxGuests: 2,
-    bedType: 'King',
-    image: '/images/executive-room.jpg',
-    description: 'Sophisticated rooms designed for the discerning business traveler.',
+    bedType: 'Master King Bed',
+    image: '/images/luxury-room.jpg',
+    images: [
+      '/images/luxury-room.jpg',
+      '/images/deluxe-2.jpg',
+      '/images/hotel-lobby.jpg',
+    ],
+    facilities: ['Climate Control AC', '55-inch Smart TV', 'Wi-Fi', 'Luxury Robe & Slippers'],
+    description: 'Stunning blush coral and gold geometric accents, designer origami lamps, and elevated comforts.',
   },
   {
-    slug: 'vip-luxury-suite',
-    name: 'VIP Luxury Suite',
-    price: 100000,
+    slug: 'executive',
+    name: 'Executive Room',
+    price: 59000,
+    maxGuests: 2,
+    bedType: 'Executive King Bed',
+    image: '/images/executive-room.jpg',
+    images: [
+      '/images/executive-room.jpg',
+      '/images/executive-1.jpg',
+      '/images/luxury-room.jpg',
+    ],
+    facilities: ['Air Conditioning', 'Smart TV with Streaming', 'Wi-Fi', 'Full Mini Bar'],
+    description: 'Regal burgundy velvet headboard, gold grid inlay, purple ambient lighting, and business-class perks.',
+  },
+  {
+    slug: 'presidential-suite',
+    name: 'Presidential Suite',
+    price: 153000,
     maxGuests: 4,
-    bedType: 'King (Premium)',
-    image: '/images/vip-suite.jpg',
-    description: 'Our finest accommodation with unparalleled luxury and space.',
+    bedType: 'Master King + Private Salon',
+    image: '/images/presidential-suite.jpg',
+    images: [
+      '/images/presidential-suite.jpg',
+      '/images/vip-suite.jpg',
+      '/images/hotel-lobby.jpg',
+      '/images/hotel-front-drone.jpg',
+    ],
+    facilities: ['Private Living Room', 'Master King Bedroom', '65-inch 4K Smart TVs', '24/7 Butler Service'],
+    description: 'The crowning jewel featuring an expansive private living salon, lounge seating, and VIP butler service.',
   },
 ];
 
@@ -137,15 +178,9 @@ export default function HomePage() {
               <Bed size={20} />
               Book a Room
             </Link>
-            <a
-              href={generateWhatsAppURL(whatsappNumber, 'Hello! I would like to book a room at Super E Luxury Hotel.')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-whatsapp btn-lg"
-            >
-              <MessageCircle size={20} />
-              Contact Us on WhatsApp
-            </a>
+            <Link href="/rooms" className="btn btn-outline-white btn-lg">
+              Explore Rooms &amp; Rates
+            </Link>
           </div>
         </div>
       </section>
@@ -172,17 +207,20 @@ export default function HomePage() {
           }}>
             {rooms.map((room, index) => (
               <div key={room.slug} className={`room-card animate-fade-in-up animate-delay-${(index + 1) * 100}`}>
-                <div className="room-card-image">
-                  <Image
-                    src={room.image}
-                    alt={room.name}
-                    fill
-                    style={{ objectFit: 'cover' }}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
+                  <RoomImageCarousel
+                    images={room.images}
+                    fallbackImage={room.image}
+                    roomName={room.name}
+                    facilities={room.facilities}
+                    height="210px"
+                    priority={index === 0}
+                    badge={
+                      <div className="room-card-price" style={{ position: 'static' }}>
+                        {formatPrice(room.price)}<span style={{ fontWeight: 400, fontSize: '0.75rem' }}>/night</span>
+                      </div>
+                    }
                   />
-                  <div className="room-card-price">
-                    {formatPrice(room.price)}<span style={{ fontWeight: 400, fontSize: '0.75rem' }}>/night</span>
-                  </div>
                 </div>
                 <div className="room-card-body">
                   <h3>{room.name}</h3>
@@ -518,15 +556,9 @@ export default function HomePage() {
               <Bed size={20} />
               Book a Room Now
             </Link>
-            <a
-              href={generateWhatsAppURL(whatsappNumber, 'Hello! I would like to book a room at Super E Luxury Hotel.')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-white btn-lg"
-            >
-              <MessageCircle size={20} />
-              WhatsApp Us
-            </a>
+            <Link href="/rooms" className="btn btn-white btn-lg">
+              View All Rooms
+            </Link>
           </div>
         </div>
       </section>

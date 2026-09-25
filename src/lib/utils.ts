@@ -56,11 +56,16 @@ export function generateWhatsAppBookingMessage(
     reference: string;
     guestName: string;
     phone: string;
+    whatsapp?: string;
     roomName: string;
     checkIn: string;
     checkOut: string;
     numGuests: number;
     totalAmount: number;
+    paymentBank?: string;
+    paymentAccountNumber?: string;
+    paymentAccountName?: string;
+    hasReceiptUploaded?: boolean;
     specialRequests?: string;
     currencySymbol?: string;
   }
@@ -68,20 +73,31 @@ export function generateWhatsAppBookingMessage(
   const currency = booking.currencySymbol || '₦';
   const nights = calculateNights(booking.checkIn, booking.checkOut);
   
-  const message = `🏨 *NEW BOOKING — SUPER E LUXURY HOTEL*
+  const bank = booking.paymentBank || 'Moniepoint Microfinance Bank';
+  const accNum = booking.paymentAccountNumber || '5326187865';
+  const accName = booking.paymentAccountName || 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION';
 
-📋 *Ref:* ${booking.reference}
-👤 *Guest:* ${booking.guestName}
-📱 *Phone:* ${booking.phone}
+  const message = `🏨 *RESERVATION & PAYMENT CONFIRMATION*
+*Super E Luxury Hotel & Suites Ltd.*
+
+📋 *Booking Ref:* ${booking.reference}
+👤 *Guest Name:* ${booking.guestName}
+📱 *Phone:* ${booking.phone}${booking.whatsapp ? `\n💬 *WhatsApp:* ${booking.whatsapp}` : ''}
 🛏️ *Room:* ${booking.roomName}
 📅 *Check-in:* ${formatDate(booking.checkIn)}
 📅 *Check-out:* ${formatDate(booking.checkOut)}
-🌙 *Nights:* ${nights}
+🌙 *Duration:* ${nights} ${nights === 1 ? 'Night' : 'Nights'}
 👥 *Guests:* ${booking.numGuests}
-💰 *Total:* ${currency}${booking.totalAmount.toLocaleString('en-NG')}
-${booking.specialRequests ? `\n💬 *Requests:* ${booking.specialRequests}` : ''}
+💰 *Total Paid:* ${currency}${booking.totalAmount.toLocaleString('en-NG')}
 
-📌 *Status:* Awaiting Confirmation`;
+🏦 *OFFICIAL COMPANY PAYMENT ACCOUNT:*
+• *Bank:* ${bank}
+• *Account Number:* ${accNum}
+• *Account Name:* ${accName}
+${booking.hasReceiptUploaded ? '📎 *Payment Receipt:* Uploaded on website / attached' : ''}
+${booking.specialRequests ? `\n💬 *Special Requests:* ${booking.specialRequests}` : ''}
+
+✅ *Action:* I have completed my transfer to the company account above and uploaded the payment receipt screenshot. Kindly verify and confirm my check-in reservation. Thank you!`;
 
   // Format Nigerian number for WhatsApp (add 234 country code)
   const formattedNumber = formatWhatsAppNumber(whatsappNumber);

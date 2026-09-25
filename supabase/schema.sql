@@ -14,8 +14,8 @@ CREATE TABLE hotel_settings (
   hotel_name TEXT NOT NULL DEFAULT 'SUPER E LUXURY HOTEL & SUITES',
   tagline TEXT DEFAULT 'Luxury at Its Peak',
   description TEXT DEFAULT 'Experience unparalleled luxury and comfort at Super E Luxury Hotel & Suites, Keffi, Nigeria.',
-  phone TEXT DEFAULT '09131964939',
-  whatsapp TEXT DEFAULT '09131964939',
+  phone TEXT DEFAULT '07066472533',
+  whatsapp TEXT DEFAULT '07066472533',
   email TEXT DEFAULT '',
   address TEXT DEFAULT 'Keffi, Nasarawa State, Nigeria',
   city TEXT DEFAULT 'Keffi',
@@ -49,12 +49,16 @@ CREATE TABLE room_categories (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Default categories
+-- Default categories (8 Official Tiers)
 INSERT INTO room_categories (name, slug, description, display_order) VALUES
   ('Standard Room', 'standard', 'Comfortable and well-appointed rooms perfect for a pleasant stay.', 1),
   ('Deluxe Room', 'deluxe', 'Spacious rooms with premium amenities for an elevated experience.', 2),
-  ('Executive Room', 'executive', 'Sophisticated rooms designed for the discerning business traveler.', 3),
-  ('VIP / Luxury Suite', 'vip-luxury-suite', 'Our finest accommodation with unparalleled luxury and space.', 4);
+  ('Deluxe 1', 'deluxe-1', 'Upgraded Deluxe tier with premium walnut accents, ambient mood lighting, and vanity mirror.', 3),
+  ('Deluxe 2', 'deluxe-2', 'Highest Deluxe tier offering velvet headboard, executive work station, and luxury bath amenities.', 4),
+  ('Luxury Room', 'luxury', 'Rich coral blush padded headboard with gold chevron accents and lounge seating.', 5),
+  ('Executive Room', 'executive', 'Regal burgundy velvet headboard, dedicated meeting desk, and VIP room service.', 6),
+  ('Executive Room 1', 'executive-1', 'Premier executive suite with panoramic city views and dual work monitors setup.', 7),
+  ('Presidential Suite', 'presidential-suite', 'The crowning jewel with private living salon, luxury dining, and 24/7 butler service.', 8);
 
 -- =====================================================
 -- 3. ROOMS
@@ -78,18 +82,19 @@ CREATE TABLE rooms (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Default rooms
-INSERT INTO rooms (category_id, name, slug, description, price_per_night, max_guests, bed_type, room_size, facilities, is_featured, display_order) VALUES
+-- Default rooms (All 8 Tiers with Multi-Photo Arrays)
+INSERT INTO rooms (category_id, name, slug, description, price_per_night, max_guests, bed_type, room_size, facilities, photos, is_featured, display_order) VALUES
   (
     (SELECT id FROM room_categories WHERE slug = 'standard'),
     'Standard Room',
     'standard-room',
-    'Our Standard Room offers a comfortable retreat with all essential amenities. Perfect for solo travelers or couples seeking a pleasant stay in Keffi.',
-    25000,
+    'Our Standard Room offers a comfortable retreat with premium bedding, climate control, and essential amenities. Ideal for business travellers and couples.',
+    36000,
     2,
-    'Queen',
+    'Queen Bed',
     '25 sqm',
-    '["Air Conditioning", "Flat Screen TV", "Wi-Fi", "Hot Water", "Wardrobe", "Desk"]'::jsonb,
+    '["Air Conditioning", "Flat Screen TV", "High-Speed Wi-Fi", "Hot Water", "Wardrobe", "Work Desk"]'::jsonb,
+    '["/images/standard-room.jpg", "/images/hotel-lobby.jpg", "/images/hotel-exterior.jpg"]'::jsonb,
     true,
     1
   ),
@@ -97,40 +102,99 @@ INSERT INTO rooms (category_id, name, slug, description, price_per_night, max_gu
     (SELECT id FROM room_categories WHERE slug = 'deluxe'),
     'Deluxe Room',
     'deluxe-room',
-    'Step up to our Deluxe Room for a more spacious and refined experience. Featuring premium furnishings and enhanced amenities for a truly comfortable stay.',
-    40000,
+    'Spacious Deluxe room featuring sophisticated finishes, plush king bedding, tea/coffee maker, and enhanced lounging space.',
+    47000,
     2,
-    'King',
-    '35 sqm',
-    '["Air Conditioning", "Flat Screen TV", "Wi-Fi", "Hot Water", "Mini Fridge", "Wardrobe", "Sitting Area", "Desk"]'::jsonb,
+    'King Bed',
+    '32 sqm',
+    '["Air Conditioning", "Smart Flat Screen TV", "Wi-Fi", "Hot Water", "Mini Refrigerator", "Wardrobe", "Sitting Lounge"]'::jsonb,
+    '["/images/deluxe-room.jpg", "/images/deluxe-1.jpg", "/images/hotel-lobby.jpg"]'::jsonb,
     true,
     2
+  ),
+  (
+    (SELECT id FROM room_categories WHERE slug = 'deluxe-1'),
+    'Deluxe 1',
+    'deluxe-1',
+    'Upgraded Deluxe tier with premium walnut accents, ambient mood lighting, vanity mirror, and soundproofed windows for tranquil rest.',
+    49000,
+    2,
+    'King Bed (Plush)',
+    '36 sqm',
+    '["Air Conditioning", "Smart TV with DSTV", "High-Speed Wi-Fi", "Hot Water", "Mini Refrigerator", "Modern Armchair", "Wardrobe"]'::jsonb,
+    '["/images/deluxe-1.jpg", "/images/deluxe-room.jpg", "/images/room-rates-board.jpg"]'::jsonb,
+    true,
+    3
+  ),
+  (
+    (SELECT id FROM room_categories WHERE slug = 'deluxe-2'),
+    'Deluxe 2',
+    'deluxe-2',
+    'Our highest Deluxe tier offering architectural elegance, velvet headboard, executive work station, city view, and luxury bath amenities.',
+    50500,
+    2,
+    'King Bed (Signature)',
+    '38 sqm',
+    '["Air Conditioning", "Smart LED TV", "High-Speed Wi-Fi", "Rain Shower & Hot Water", "Mini Bar Fridge", "Executive Workspace", "Bathrobes"]'::jsonb,
+    '["/images/deluxe-2.jpg", "/images/deluxe-1.jpg", "/images/hotel-exterior.jpg"]'::jsonb,
+    false,
+    4
+  ),
+  (
+    (SELECT id FROM room_categories WHERE slug = 'luxury'),
+    'Luxury Room',
+    'luxury-room',
+    'An exceptional blend of style and comfort. Features rich coral blush padded headboard with diagonal gold chevron accents, custom origami bird lamps, and premium toiletries.',
+    53000,
+    2,
+    'Master King Bed',
+    '42 sqm',
+    '["Climate Control AC", "55-inch Smart TV", "High-Speed Wi-Fi", "Hot Water & Shower", "Mini Refrigerator", "Comfortable Lounge Seating", "Luxury Robe & Slippers"]'::jsonb,
+    '["/images/luxury-room.jpg", "/images/deluxe-2.jpg", "/images/hotel-lobby.jpg"]'::jsonb,
+    true,
+    5
   ),
   (
     (SELECT id FROM room_categories WHERE slug = 'executive'),
     'Executive Room',
     'executive-room',
-    'Our Executive Room is designed for guests who demand excellence. Enjoy a sophisticated space with premium amenities and a dedicated work area.',
-    60000,
+    'Tailored for corporate executives and discerning travelers. Features regal burgundy velvet headboard with gold grid inlays, purple ambient ceiling lighting, dedicated meeting desk, and VIP room service.',
+    59000,
     2,
-    'King',
+    'Executive King Bed',
     '45 sqm',
-    '["Air Conditioning", "Flat Screen TV", "Wi-Fi", "Hot Water", "Mini Bar", "Refrigerator", "Sitting Area", "Executive Desk", "Bathrobe", "Complimentary Toiletries"]'::jsonb,
+    '["Air Conditioning", "Smart TV with Streaming", "High-Speed Wi-Fi", "Hot Water", "Full Mini Bar", "Executive Desk & Ergonomic Chair", "Room Service Priority"]'::jsonb,
+    '["/images/executive-room.jpg", "/images/executive-1.jpg", "/images/luxury-room.jpg"]'::jsonb,
     true,
-    3
+    6
   ),
   (
-    (SELECT id FROM room_categories WHERE slug = 'vip-luxury-suite'),
-    'VIP Luxury Suite',
-    'vip-luxury-suite',
-    'The pinnacle of luxury at Super E Hotel. Our VIP Suite offers an expansive living space, premium furnishings, and exclusive amenities for an unforgettable experience.',
-    100000,
+    (SELECT id FROM room_categories WHERE slug = 'executive-1'),
+    'Executive Room 1',
+    'executive-room-1',
+    'Premier executive accommodation with panoramic city views, designer glass wardrobe, dual work monitors setup, and VIP personalized room service.',
+    65000,
+    2,
+    'Executive King (Royal)',
+    '50 sqm',
+    '["Dual AC Units", "60-inch Smart TV", "Dedicated Fiber Wi-Fi", "Hot Water Shower & Tub", "Stocked Mini Bar", "Executive Suite Desk", "VIP Welcome Refreshment"]'::jsonb,
+    '["/images/executive-1.jpg", "/images/executive-room.jpg", "/images/hotel-aerial-drone.jpg"]'::jsonb,
+    false,
+    7
+  ),
+  (
+    (SELECT id FROM room_categories WHERE slug = 'presidential-suite'),
+    'Presidential Suite',
+    'presidential-suite',
+    'The crowning jewel of Super E Luxury Hotel. Expansive master suite featuring private living salon with sofa lounge and coffee table, tall cream & gold headboard, luxury dining area, and 24/7 dedicated butler service.',
+    153000,
     4,
-    'King (Premium)',
-    '70 sqm',
-    '["Air Conditioning", "Smart TV", "High-Speed Wi-Fi", "Hot Water", "Full Mini Bar", "Refrigerator", "Living Room", "Dining Area", "Executive Desk", "Premium Bathroom", "Bathrobe & Slippers", "Complimentary Toiletries", "Room Service Priority"]'::jsonb,
+    'Master King Bed + Private Lounge',
+    '85 sqm',
+    '["Private Living Room & Dining Area", "Master King Bedroom", "65-inch 4K Smart TVs", "High-Speed Wi-Fi", "Jacuzzi & Rain Shower", "Full Bar & Refrigerator", "Complimentary VIP Breakfast", "24/7 Dedicated Butler Service"]'::jsonb,
+    '["/images/presidential-suite.jpg", "/images/vip-suite.jpg", "/images/hotel-lobby.jpg", "/images/hotel-front-drone.jpg"]'::jsonb,
     true,
-    4
+    8
   );
 
 -- =====================================================

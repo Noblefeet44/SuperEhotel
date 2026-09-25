@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Metadata } from 'next';
 import { MapPin, Phone, Mail, Clock, MessageCircle, Send } from 'lucide-react';
+import { HOTEL_INFO } from '@/lib/hotel-data';
 import { generateWhatsAppURL, generatePhoneURL } from '@/lib/utils';
 
 export default function ContactPage() {
@@ -15,8 +16,8 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const whatsappNumber = '09131964939';
-  const phoneNumber = '09131964939';
+  const whatsappNumber = HOTEL_INFO.whatsappNumber;
+  const phoneNumber = HOTEL_INFO.hotlines[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

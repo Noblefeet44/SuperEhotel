@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FileText, ArrowLeft, Save, Globe } from 'lucide-react';
+import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 
 export default function AdminContentPage() {
   const router = useRouter();
@@ -29,7 +30,14 @@ export default function AdminContentPage() {
   };
 
   return (
-    <div className="admin-layout">
+    <div className="admin-layout" style={{ maxWidth: '100vw', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+      {/* Mobile Top Navigation */}
+      <AdminMobileNav
+        title="Site Content"
+        subtitle="Homepage Headlines & Copy"
+        backHref="/admin"
+      />
+
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header"><h2>Super E Hotel</h2><span>Admin Dashboard</span></div>
         <nav style={{ padding: 'var(--space-sm) 0' }}>
@@ -38,7 +46,8 @@ export default function AdminContentPage() {
         </nav>
       </aside>
 
-      <main className="admin-main">
+      <main className="admin-main" style={{ minWidth: 0, width: '100%', maxWidth: '100vw', overflowX: 'hidden', boxSizing: 'border-box' }}>
+
         <div className="admin-header">
           <h1>Website Content CMS</h1>
           <button className="btn btn-primary" onClick={handleSave}>

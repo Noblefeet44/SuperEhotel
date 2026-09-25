@@ -35,6 +35,14 @@ export interface RoomCategory {
   updated_at: string;
 }
 
+export interface RoomUnit {
+  id: string;
+  room_number: string;
+  floor?: string;
+  status: 'available' | 'booked' | 'occupied' | 'maintenance';
+  notes?: string;
+}
+
 export interface Room {
   id: string;
   category_id: string;
@@ -52,8 +60,11 @@ export interface Room {
   display_order: number;
   created_at: string;
   updated_at: string;
-  // Joined
+  // Joined / Units
   category?: RoomCategory;
+  units?: RoomUnit[];
+  total_units?: number;
+  available_units?: number;
 }
 
 export interface Guest {
