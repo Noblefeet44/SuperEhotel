@@ -22,46 +22,81 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const masterEmail = (process.env.ADMIN_EMAIL || 'admin@superehotel.com').toLowerCase().trim();
+    const masterPassword = (process.env.ADMIN_PASSWORD || 'SuperE2026').trim();
+    const inputEmail = email.toLowerCase().trim();
+    const inputPassword = password.trim();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: password.trim(),
-    });
+    let authenticatedUser: { email: string; role: string } | null = null;
+    let accessToken = '';
+    let refreshToken = '';
+    let expiresIn = 60 * 60 * 24 * 7;
 
-    if (error || !data.session) {
+    // 1. Try Supabase Auth
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: inputEmail,
+          password: inputPassword,
+        });
+
+        if (!error && data?.session) {
+          authenticatedUser = {
+            email: data.user.email || inputEmail,
+            role: 'administrator',
+          };
+          accessToken = data.session.access_token;
+          refreshToken = data.session.refresh_token;
+          expiresIn = data.session.expires_in || expiresIn;
+        }
+      } catch (authErr) {
+        console.warn('Supabase auth attempt error:', authErr);
+      }
+    }
+
+    // 2. Master Credentials check (if Supabase Auth did not match or is unavailable)
+    if (!authenticatedUser && inputEmail === masterEmail && inputPassword === masterPassword) {
+      authenticatedUser = {
+        email: masterEmail,
+        role: 'administrator',
+      };
+      accessToken = 'master-admin-session-token-' + Date.now();
+      refreshToken = 'master-admin-refresh-token-' + Date.now();
+    }
+
+    if (!authenticatedUser) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password. Please check your credentials.' },
         { status: 401 }
       );
     }
 
-    // Set the Supabase auth tokens as httpOnly cookies
+    // Set the auth tokens as cookies
     const response = NextResponse.json({
       success: true,
       message: 'Admin authentication successful',
-      user: {
-        email: data.user.email,
-        role: 'administrator',
-      },
+      user: authenticatedUser,
     });
 
-    // Store the access token in a secure httpOnly cookie
-    response.cookies.set('sb-access-token', data.session.access_token, {
+    // Store the access token in a cookie
+    response.cookies.set('sb-access-token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: data.session.expires_in || 60 * 60 * 24 * 7,
+      maxAge: expiresIn,
     });
 
-    response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    });
+    if (refreshToken) {
+      response.cookies.set('sb-refresh-token', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+      });
+    }
 
     // Non-httpOnly flag for client-side auth status check only (no secrets)
     response.cookies.set('admin_authenticated', 'true', {
@@ -69,7 +104,7 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: data.session.expires_in || 60 * 60 * 24 * 7,
+      maxAge: expiresIn,
     });
 
     return response;

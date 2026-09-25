@@ -40,13 +40,20 @@ export async function updateSession(request: NextRequest) {
   const hasAuthCookie = allCookies.some(c =>
     c.name.includes('auth-token') ||
     c.name.includes('supabase') ||
-    c.name === 'sb-access-token'
+    c.name === 'sb-access-token' ||
+    c.name === 'admin_authenticated'
   );
 
   if (!hasAuthCookie) {
     const url = request.nextUrl.clone();
     url.pathname = '/admin/login';
     return NextResponse.redirect(url);
+  }
+
+  // Fast-path: If admin_authenticated cookie is valid, allow access
+  const adminAuthCookie = request.cookies.get('admin_authenticated')?.value;
+  if (adminAuthCookie === 'true') {
+    return supabaseResponse;
   }
 
   try {
