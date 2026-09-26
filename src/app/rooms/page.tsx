@@ -23,6 +23,16 @@ export default function RoomsPage() {
   useEffect(() => {
     setRooms(getStoredRoomsData());
 
+    fetch('/api/rooms')
+      .then((res) => res.json())
+      .then((data) => {
+        const live = Array.isArray(data) ? data : (data.rooms || []);
+        if (live.length > 0) {
+          setRooms(live);
+        }
+      })
+      .catch(() => {});
+
     const handleUpdate = () => {
       setRooms(getStoredRoomsData());
     };

@@ -76,6 +76,8 @@ export function RoomImageCarousel({
     touchEndX.current = null;
   };
 
+  const safeIndex = currentIndex >= validImages.length ? Math.max(0, validImages.length - 1) : currentIndex;
+
   return (
     <div style={{ width: '100%', position: 'relative' }}>
       {/* Main Carousel Container */}
@@ -95,12 +97,12 @@ export function RoomImageCarousel({
         {/* Render Current Slide with smooth transition */}
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
           <Image
-            src={validImages[currentIndex] || fallbackImage}
-            alt={`${roomName} - Photo ${currentIndex + 1}`}
+            src={validImages[safeIndex] || fallbackImage}
+            alt={`${roomName} - Photo ${safeIndex + 1}`}
             fill
             style={{ objectFit: 'cover', transition: 'opacity 0.25s ease' }}
             sizes="(max-width: 768px) 100vw, 600px"
-            priority={priority && currentIndex === 0}
+            priority={priority && safeIndex === 0}
           />
         </div>
 
@@ -157,7 +159,7 @@ export function RoomImageCarousel({
             }}
           >
             <ImageIcon size={12} style={{ color: '#FCD34D' }} />
-            {currentIndex + 1}/{validImages.length}
+            {safeIndex + 1}/{validImages.length}
           </span>
 
           {/* Fullscreen Lightbox Button */}
@@ -328,10 +330,10 @@ export function RoomImageCarousel({
                 onClick={(e) => goToSlide(idx, e)}
                 aria-label={`Go to slide ${idx + 1}`}
                 style={{
-                  width: idx === currentIndex ? '18px' : '6px',
+                  width: idx === safeIndex ? '18px' : '6px',
                   height: '6px',
                   borderRadius: '9999px',
-                  backgroundColor: idx === currentIndex ? '#FCD34D' : 'rgba(255, 255, 255, 0.5)',
+                  backgroundColor: idx === safeIndex ? '#FCD34D' : 'rgba(255, 255, 255, 0.5)',
                   border: 'none',
                   padding: 0,
                   cursor: 'pointer',
@@ -367,10 +369,10 @@ export function RoomImageCarousel({
                 borderRadius: '8px',
                 overflow: 'hidden',
                 flexShrink: 0,
-                border: idx === currentIndex ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                border: idx === safeIndex ? '2px solid #2563EB' : '1px solid #CBD5E1',
                 padding: 0,
                 cursor: 'pointer',
-                opacity: idx === currentIndex ? 1 : 0.65,
+                opacity: idx === safeIndex ? 1 : 0.65,
                 transition: 'all 0.15s ease',
                 backgroundColor: '#0F172A',
               }}
@@ -420,7 +422,7 @@ export function RoomImageCarousel({
                 {roomName}
               </h3>
               <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                Photo {currentIndex + 1} of {validImages.length}
+                Photo {safeIndex + 1} of {validImages.length}
               </span>
             </div>
 
@@ -463,7 +465,7 @@ export function RoomImageCarousel({
           >
             <div style={{ position: 'relative', width: '100%', height: '100%' }}>
               <Image
-                src={validImages[currentIndex] || fallbackImage}
+                src={validImages[safeIndex] || fallbackImage}
                 alt={`${roomName} Full Photo`}
                 fill
                 style={{ objectFit: 'contain' }}

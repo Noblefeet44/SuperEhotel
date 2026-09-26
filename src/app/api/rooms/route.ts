@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { INITIAL_ROOMS_DATA, RoomCategoryData } from '@/lib/hotel-data';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'rooms.json');
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,8 +14,43 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// GET /api/rooms: Fetch live rooms from Supabase, fallback to INITIAL_ROOMS_DATA
+function ensureRoomsFile(): RoomCategoryData[] {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DATA_FILE)) {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_ROOMS_DATA, null, 2), 'utf8');
+      return INITIAL_ROOMS_DATA;
+    }
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return INITIAL_ROOMS_DATA;
+  } catch (err) {
+    console.error('Error reading rooms file:', err);
+    return INITIAL_ROOMS_DATA;
+  }
+}
+
+function saveRooms(rooms: RoomCategoryData[]): boolean {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(rooms, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error saving rooms file:', err);
+    return false;
+  }
+}
+
+// GET /api/rooms: Fetch live rooms from server file and Supabase
 export async function GET() {
+  const localRooms = ensureRoomsFile();
   const supabase = getSupabase();
 
   if (supabase) {
@@ -26,6 +66,8 @@ export async function GET() {
             ? r.photos
             : ['/images/standard-room.jpg'];
 
+          const localMatch = localRooms.find((lr) => lr.slug === r.slug || lr.id === r.id);
+
           return {
             id: r.id,
             slug: r.slug,
@@ -40,7 +82,7 @@ export async function GET() {
             description: r.description || '',
             facilities: Array.isArray(r.facilities) ? r.facilities : [],
             isFeatured: Boolean(r.is_featured),
-            units: [],
+            units: localMatch?.units || [],
           };
         });
 
@@ -51,58 +93,163 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ success: true, rooms: INITIAL_ROOMS_DATA });
+  return NextResponse.json({ success: true, rooms: localRooms });
 }
 
-// POST /api/rooms: Update or insert room tier in Supabase
+// POST /api/rooms: Update or insert room tier (saves to data/rooms.json and Supabase)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { id, slug, name, price, maxGuests, bedType, roomSize, images, image, description, facilities, isFeatured } = body;
+    const { id, slug, name, price, maxGuests, bedType, roomSize, images, image, description, facilities, isFeatured, units } = body;
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      return NextResponse.json({ success: true, message: 'Saved locally' });
-    }
+    const currentRooms = ensureRoomsFile();
+    const photos = images && Array.isArray(images) && images.length > 0
+      ? images
+      : (image ? [image] : ['/images/standard-room.jpg']);
 
-    const photos = images && images.length > 0 ? images : (image ? [image] : ['/images/standard-room.jpg']);
+    const targetRoomIndex = currentRooms.findIndex((r) => r.slug === slug || r.id === id);
 
-    const updateData: any = {
-      name,
-      price_per_night: Number(price) || 40000,
-      max_guests: Number(maxGuests) || 2,
-      bed_type: bedType || 'King Bed',
-      room_size: roomSize || '30 sqm',
+    const roomPayload: RoomCategoryData = {
+      id: id || slug || `room_${Date.now()}`,
+      slug: slug || id || 'standard',
+      name: name || 'Standard Room',
+      category: body.category || 'Standard',
+      price: Number(price) || 36000,
+      maxGuests: Number(maxGuests) || 2,
+      bedType: bedType || 'Queen Bed',
+      roomSize: roomSize || '25 sqm',
+      image: photos[0],
+      images: photos,
       description: description || '',
       facilities: Array.isArray(facilities) ? facilities : [],
-      photos,
-      updated_at: new Date().toISOString(),
+      isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : true,
+      units: Array.isArray(units) ? units : (targetRoomIndex >= 0 ? currentRooms[targetRoomIndex].units : []),
     };
 
-    if (isFeatured !== undefined) {
-      updateData.is_featured = Boolean(isFeatured);
+    let updatedRooms: RoomCategoryData[];
+    if (targetRoomIndex >= 0) {
+      updatedRooms = currentRooms.map((r, i) => (i === targetRoomIndex ? roomPayload : r));
+    } else {
+      updatedRooms = [...currentRooms, roomPayload];
     }
 
-    // Try updating by slug or id
-    let result = null;
-    if (slug) {
-      const { data } = await supabase.from('rooms').update(updateData).eq('slug', slug).select();
-      result = data;
-    }
-    if ((!result || result.length === 0) && id) {
-      const { data } = await supabase.from('rooms').update(updateData).eq('id', id).select();
-      result = data;
+    saveRooms(updatedRooms);
+
+    // Sync to Supabase in background if configured
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const updateData: any = {
+          name: roomPayload.name,
+          price_per_night: roomPayload.price,
+          max_guests: roomPayload.maxGuests,
+          bed_type: roomPayload.bedType,
+          room_size: roomPayload.roomSize,
+          description: roomPayload.description,
+          facilities: roomPayload.facilities,
+          photos: roomPayload.images,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (isFeatured !== undefined) {
+          updateData.is_featured = Boolean(isFeatured);
+        }
+
+        if (slug) {
+          await supabase.from('rooms').update(updateData).eq('slug', slug);
+        } else if (id) {
+          await supabase.from('rooms').update(updateData).eq('id', id);
+        }
+      } catch (err) {
+        console.warn('Supabase room update notice:', err);
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Room updated in Supabase database',
-      data: result,
+      message: 'Room and photos saved successfully',
+      room: roomPayload,
+      rooms: updatedRooms,
     });
   } catch (error: any) {
-    console.error('Error updating room in Supabase:', error);
+    console.error('Error updating room:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update room in Supabase' },
+      { success: false, error: error.message || 'Failed to update room' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/rooms: Delete a specific photo from a room carousel or delete an entire room
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const roomId = searchParams.get('roomId') || searchParams.get('id');
+    const photoUrl = searchParams.get('photoUrl');
+    const photoIndex = searchParams.get('photoIndex');
+
+    if (!roomId) {
+      return NextResponse.json({ success: false, error: 'Missing roomId parameter' }, { status: 400 });
+    }
+
+    const currentRooms = ensureRoomsFile();
+    const roomIndex = currentRooms.findIndex((r) => r.id === roomId || r.slug === roomId);
+
+    if (roomIndex === -1) {
+      return NextResponse.json({ success: false, error: 'Room not found' }, { status: 404 });
+    }
+
+    const room = currentRooms[roomIndex];
+    let updatedImages = [...(room.images || [room.image])];
+
+    if (photoUrl) {
+      updatedImages = updatedImages.filter((img) => img !== photoUrl);
+    } else if (photoIndex !== null && photoIndex !== undefined) {
+      const idx = parseInt(photoIndex, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < updatedImages.length) {
+        updatedImages.splice(idx, 1);
+      }
+    }
+
+    if (updatedImages.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Each room category must have at least one photo.',
+      }, { status: 400 });
+    }
+
+    const updatedRoom: RoomCategoryData = {
+      ...room,
+      image: updatedImages[0],
+      images: updatedImages,
+    };
+
+    const updatedRooms = currentRooms.map((r, i) => (i === roomIndex ? updatedRoom : r));
+    saveRooms(updatedRooms);
+
+    // Sync to Supabase
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        await supabase
+          .from('rooms')
+          .update({ photos: updatedImages, updated_at: new Date().toISOString() })
+          .eq('slug', room.slug);
+      } catch (err) {
+        console.warn('Supabase delete photo notice:', err);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Photo deleted from carousel successfully',
+      room: updatedRoom,
+      rooms: updatedRooms,
+    });
+  } catch (error: any) {
+    console.error('Error deleting photo:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to delete photo' },
       { status: 500 }
     );
   }

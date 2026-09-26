@@ -36,6 +36,24 @@ export default function AdminRoomsPage() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [newCustomImageUrl, setNewCustomImageUrl] = useState('');
 
+  // Helper to persist room updates immediately to React state, localStorage and server API
+  const persistRoomChange = async (updatedRoom: RoomCategoryData) => {
+    setEditingRoom(updatedRoom);
+    const updatedRooms = rooms.map((r) => (r.id === updatedRoom.id ? updatedRoom : r));
+    setRooms(updatedRooms);
+    saveStoredRoomsData(updatedRooms);
+
+    try {
+      await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRoom),
+      });
+    } catch (err) {
+      console.warn('Server room sync warning:', err);
+    }
+  };
+
   // Handle uploading multiple photos from phone or computer
   const handleMultipleRoomPhotosUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -73,11 +91,13 @@ export default function AdminRoomsPage() {
         ? [...editingRoom.images]
         : (editingRoom.image ? [editingRoom.image] : []);
       const combined = [...existing, ...uploadedUrls];
-      setEditingRoom({
+      const updatedRoom: RoomCategoryData = {
         ...editingRoom,
         image: combined[0],
         images: combined,
-      });
+      };
+      await persistRoomChange(updatedRoom);
+      triggerSaveNotification();
     }
 
     setUploadStatus(null);
@@ -85,7 +105,7 @@ export default function AdminRoomsPage() {
   };
 
   // Reorder photo left or right
-  const handleMovePhoto = (index: number, direction: 'left' | 'right') => {
+  const handleMovePhoto = async (index: number, direction: 'left' | 'right') => {
     if (!editingRoom) return;
     const currentImgs = editingRoom.images && editingRoom.images.length > 0
       ? [...editingRoom.images]
@@ -97,15 +117,17 @@ export default function AdminRoomsPage() {
     currentImgs[index] = currentImgs[targetIdx];
     currentImgs[targetIdx] = temp;
 
-    setEditingRoom({
+    const updatedRoom: RoomCategoryData = {
       ...editingRoom,
       image: currentImgs[0],
       images: currentImgs,
-    });
+    };
+    await persistRoomChange(updatedRoom);
+    triggerSaveNotification();
   };
 
   // Set chosen image as primary cover photo
-  const handleSetCoverPhoto = (index: number) => {
+  const handleSetCoverPhoto = async (index: number) => {
     if (!editingRoom) return;
     const currentImgs = editingRoom.images && editingRoom.images.length > 0
       ? [...editingRoom.images]
@@ -115,15 +137,17 @@ export default function AdminRoomsPage() {
     const [selected] = currentImgs.splice(index, 1);
     currentImgs.unshift(selected);
 
-    setEditingRoom({
+    const updatedRoom: RoomCategoryData = {
       ...editingRoom,
       image: selected,
       images: currentImgs,
-    });
+    };
+    await persistRoomChange(updatedRoom);
+    triggerSaveNotification();
   };
 
   // Delete an image from gallery
-  const handleDeletePhoto = (index: number) => {
+  const handleDeletePhoto = async (index: number) => {
     if (!editingRoom) return;
     const currentImgs = editingRoom.images && editingRoom.images.length > 0
       ? [...editingRoom.images]
@@ -134,16 +158,32 @@ export default function AdminRoomsPage() {
       return;
     }
 
+    const deletedPhotoUrl = currentImgs[index];
     const filtered = currentImgs.filter((_, i) => i !== index);
-    setEditingRoom({
+    const updatedRoom: RoomCategoryData = {
       ...editingRoom,
       image: filtered[0],
       images: filtered,
-    });
+    };
+
+    // 1. Instantly update React state and localStorage so UI updates with 0 latency
+    await persistRoomChange(updatedRoom);
+
+    // 2. Call DELETE endpoint to ensure persistent disk & Supabase deletion
+    try {
+      await fetch(
+        `/api/rooms?roomId=${encodeURIComponent(updatedRoom.id)}&photoUrl=${encodeURIComponent(deletedPhotoUrl)}`,
+        { method: 'DELETE' }
+      );
+    } catch (err) {
+      console.warn('API DELETE photo notice:', err);
+    }
+
+    triggerSaveNotification();
   };
 
   // Add custom URL image
-  const handleAddCustomImageUrl = () => {
+  const handleAddCustomImageUrl = async () => {
     const url = newCustomImageUrl.trim();
     if (!url || !editingRoom) return;
 
@@ -152,12 +192,14 @@ export default function AdminRoomsPage() {
       : (editingRoom.image ? [editingRoom.image] : []);
 
     const updated = [...currentImgs, url];
-    setEditingRoom({
+    const updatedRoom: RoomCategoryData = {
       ...editingRoom,
       image: updated[0],
       images: updated,
-    });
+    };
+    await persistRoomChange(updatedRoom);
     setNewCustomImageUrl('');
+    triggerSaveNotification();
   };
 
   useEffect(() => {
@@ -166,7 +208,20 @@ export default function AdminRoomsPage() {
       router.push('/admin/login');
       return;
     }
+    // Load local storage first
     setRooms(getStoredRoomsData());
+
+    // Fetch live from server API to guarantee cross-device sync
+    fetch('/api/rooms')
+      .then((res) => res.json())
+      .then((data) => {
+        const live = Array.isArray(data) ? data : (data.rooms || []);
+        if (live.length > 0) {
+          setRooms(live);
+          saveStoredRoomsData(live);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch server rooms:', err));
   }, [router]);
 
   const triggerSaveNotification = () => {
@@ -267,11 +322,20 @@ export default function AdminRoomsPage() {
   };
 
   // Delete an entire room tier
-  const handleDeleteCategory = (roomId: string) => {
+  const handleDeleteCategory = async (roomId: string) => {
     if (!confirm('Are you sure you want to delete this room category and all its inventory?')) return;
     const updated = rooms.filter((r) => r.id !== roomId);
     setRooms(updated);
     saveStoredRoomsData(updated);
+
+    try {
+      await fetch(`/api/rooms?roomId=${encodeURIComponent(roomId)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('API DELETE room category notice:', err);
+    }
+
     triggerSaveNotification();
   };
 

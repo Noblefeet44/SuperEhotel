@@ -7,7 +7,8 @@ import {
   MessageCircle, Phone, ArrowRight
 } from 'lucide-react';
 import { generateWhatsAppURL, generatePhoneURL, formatPrice } from '@/lib/utils';
-import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
+import { HomeRoomShowcase } from '@/components/home/HomeRoomShowcase';
+import { getServerRoomsData } from '@/lib/server-rooms';
 
 // Icon mapping for facilities
 const facilityIcons: Record<string, React.ReactNode> = {
@@ -25,85 +26,6 @@ const facilityIcons: Record<string, React.ReactNode> = {
   zap: <Zap size={24} />,
 };
 
-// Featured room categories with official rates and authentic photos
-const rooms = [
-  {
-    slug: 'standard',
-    name: 'Standard Room',
-    price: 36000,
-    maxGuests: 2,
-    bedType: 'Queen Bed',
-    image: '/images/standard-room.jpg',
-    images: [
-      '/images/standard-room.jpg',
-      '/images/hotel-lobby.jpg',
-      '/images/hotel-exterior.jpg',
-    ],
-    facilities: ['Air Conditioning', 'Flat Screen TV', 'High-Speed Wi-Fi', 'Hot Water'],
-    description: 'Comfortable retreat with premium bedding, climate control AC, work desk, and essential amenities.',
-  },
-  {
-    slug: 'deluxe',
-    name: 'Deluxe Room',
-    price: 47000,
-    maxGuests: 2,
-    bedType: 'King Bed',
-    image: '/images/deluxe-room.jpg',
-    images: [
-      '/images/deluxe-room.jpg',
-      '/images/deluxe-1.jpg',
-      '/images/hotel-lobby.jpg',
-    ],
-    facilities: ['Air Conditioning', 'Smart Flat Screen TV', 'Wi-Fi', 'Mini Refrigerator'],
-    description: 'Sophisticated finishes with plush king bedding, tea/coffee maker, mini-fridge, and wall-mounted TV.',
-  },
-  {
-    slug: 'luxury',
-    name: 'Luxury Room',
-    price: 53000,
-    maxGuests: 2,
-    bedType: 'Master King Bed',
-    image: '/images/luxury-room.jpg',
-    images: [
-      '/images/luxury-room.jpg',
-      '/images/deluxe-2.jpg',
-      '/images/hotel-lobby.jpg',
-    ],
-    facilities: ['Climate Control AC', '55-inch Smart TV', 'Wi-Fi', 'Luxury Robe & Slippers'],
-    description: 'Stunning blush coral and gold geometric accents, designer origami lamps, and elevated comforts.',
-  },
-  {
-    slug: 'executive',
-    name: 'Executive Room',
-    price: 59000,
-    maxGuests: 2,
-    bedType: 'Executive King Bed',
-    image: '/images/executive-room.jpg',
-    images: [
-      '/images/executive-room.jpg',
-      '/images/executive-1.jpg',
-      '/images/luxury-room.jpg',
-    ],
-    facilities: ['Air Conditioning', 'Smart TV with Streaming', 'Wi-Fi', 'Full Mini Bar'],
-    description: 'Regal burgundy velvet headboard, gold grid inlay, purple ambient lighting, and business-class perks.',
-  },
-  {
-    slug: 'presidential-suite',
-    name: 'Presidential Suite',
-    price: 153000,
-    maxGuests: 4,
-    bedType: 'Master King + Private Salon',
-    image: '/images/presidential-suite.jpg',
-    images: [
-      '/images/presidential-suite.jpg',
-      '/images/vip-suite.jpg',
-      '/images/hotel-lobby.jpg',
-      '/images/hotel-front-drone.jpg',
-    ],
-    facilities: ['Private Living Room', 'Master King Bedroom', '65-inch 4K Smart TVs', '24/7 Butler Service'],
-    description: 'The crowning jewel featuring an expansive private living salon, lounge seating, and VIP butler service.',
-  },
-];
 
 const facilities = [
   { name: 'Grand Event Hall', icon: 'event', description: '500-capacity banquet hall' },
@@ -150,6 +72,7 @@ const featuredDishes = [
 export default function HomePage() {
   const whatsappNumber = '09131964939';
   const phoneNumber = '09131964939';
+  const serverRooms = getServerRoomsData();
 
   return (
     <>
@@ -203,50 +126,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: 'var(--space-xl)',
-          }}>
-            {rooms.map((room, index) => (
-              <div key={room.slug} className={`room-card animate-fade-in-up animate-delay-${(index + 1) * 100}`}>
-                <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
-                  <RoomImageCarousel
-                    images={room.images}
-                    fallbackImage={room.image}
-                    roomName={room.name}
-                    facilities={room.facilities}
-                    height="210px"
-                    priority={index === 0}
-                    badge={
-                      <div className="room-card-price" style={{ position: 'static' }}>
-                        {formatPrice(room.price)}<span style={{ fontWeight: 400, fontSize: '0.75rem' }}>/night</span>
-                      </div>
-                    }
-                  />
-                </div>
-                <div className="room-card-body">
-                  <h3>{room.name}</h3>
-                  <div className="room-card-meta">
-                    <span><Users size={16} /> {room.maxGuests} Guests</span>
-                    <span><Bed size={16} /> {room.bedType}</span>
-                  </div>
-                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9375rem', marginBottom: 'var(--space-md)' }}>
-                    {room.description}
-                  </p>
-                  <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                    <Link href={`/rooms/${room.slug}`} className="btn btn-outline btn-sm" style={{ flex: 1 }} prefetch={true}>
-                      View Details
-                    </Link>
-                    <Link href={`/book?room=${room.slug}`} className="btn btn-primary btn-sm" style={{ flex: 1 }} prefetch={true}>
-                      Book Now
-                    </Link>
-                  </div>
-
-                </div>
-              </div>
-            ))}
-          </div>
+          <HomeRoomShowcase initialRooms={serverRooms} />
 
           <div style={{ textAlign: 'center', marginTop: 'var(--space-2xl)' }}>
             <Link href="/rooms" className="btn btn-outline">

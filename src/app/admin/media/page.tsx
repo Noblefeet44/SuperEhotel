@@ -9,6 +9,7 @@ import {
   Camera, UploadCloud, CheckCircle2, Sparkles, Filter, ExternalLink
 } from 'lucide-react';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
+import { getStoredRoomsData, saveStoredRoomsData } from '@/lib/hotel-data';
 
 interface MediaItem {
   id: string;
@@ -50,6 +51,18 @@ export default function AdminMediaPage() {
   useEffect(() => {
     if (sessionStorage.getItem('admin_authenticated') !== 'true') {
       router.push('/admin/login');
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('super_e_media_library_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMediaList(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Error reading media library from storage:', e);
     }
   }, [router]);
 
@@ -91,7 +104,13 @@ export default function AdminMediaPage() {
           isNew: true,
         };
 
-        setMediaList([newItem, ...mediaList]);
+        const updated = [newItem, ...mediaList];
+        setMediaList(updated);
+        try {
+          localStorage.setItem('super_e_media_library_v2', JSON.stringify(updated));
+        } catch (err) {
+          console.error(err);
+        }
         showToast('Photo uploaded successfully!');
       } else {
         alert(data.error || 'Failed to upload photo');
@@ -105,11 +124,58 @@ export default function AdminMediaPage() {
     }
   };
 
-  const deleteItem = (id: string) => {
-    if (confirm('Remove this photo from media list?')) {
-      setMediaList(mediaList.filter((m) => m.id !== id));
-      showToast('Photo removed from view');
+  const deleteItem = async (id: string) => {
+    const itemToDelete = mediaList.find((m) => m.id === id);
+    if (!itemToDelete) return;
+
+    if (!confirm(`Are you sure you want to permanently delete "${itemToDelete.name}"? If used in any room carousels, it will also be removed from them.`)) {
+      return;
     }
+
+    const updatedMedia = mediaList.filter((m) => m.id !== id);
+    setMediaList(updatedMedia);
+    try {
+      localStorage.setItem('super_e_media_library_v2', JSON.stringify(updatedMedia));
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Also remove from any room categories that might use this image url
+    try {
+      const storedRooms = getStoredRoomsData();
+      let anyRoomChanged = false;
+      const updatedRooms = storedRooms.map((room) => {
+        const hasUrlInImages = room.images && room.images.includes(itemToDelete.url);
+        const hasUrlAsCover = room.image === itemToDelete.url;
+
+        if (hasUrlInImages || hasUrlAsCover) {
+          anyRoomChanged = true;
+          const filteredImages = (room.images || [room.image]).filter((img) => img !== itemToDelete.url);
+          const finalImages = filteredImages.length > 0 ? filteredImages : ['/images/standard-room.jpg'];
+          const newRoom = {
+            ...room,
+            image: finalImages[0],
+            images: finalImages,
+          };
+
+          // Also trigger server delete
+          fetch(`/api/rooms?roomId=${encodeURIComponent(room.id)}&photoUrl=${encodeURIComponent(itemToDelete.url)}`, {
+            method: 'DELETE',
+          }).catch(() => {});
+
+          return newRoom;
+        }
+        return room;
+      });
+
+      if (anyRoomChanged) {
+        saveStoredRoomsData(updatedRooms);
+      }
+    } catch (err) {
+      console.warn('Error removing deleted media from rooms:', err);
+    }
+
+    showToast('Photo permanently deleted and removed from carousels');
   };
 
   const filteredMedia =

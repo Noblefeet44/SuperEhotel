@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, generatePhoneURL, generateWhatsAppURL } from '@/lib/utils';
 import { INITIAL_ROOMS_DATA, HOTEL_INFO, HOTEL_POLICIES } from '@/lib/hotel-data';
+import { getServerRoomsData, getServerRoomBySlug } from '@/lib/server-rooms';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
 interface Props {
@@ -15,14 +16,15 @@ interface Props {
 }
 
 export async function generateStaticParams() {
-  return INITIAL_ROOMS_DATA.map((room) => ({
+  const rooms = getServerRoomsData();
+  return rooms.map((room) => ({
     slug: room.slug,
   }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const room = INITIAL_ROOMS_DATA.find(
+  const room = getServerRoomBySlug(slug) || INITIAL_ROOMS_DATA.find(
     (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
   );
   if (!room) return { title: 'Room Not Found | Super E Luxury Hotel' };
@@ -40,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RoomDetailPage({ params }: Props) {
   const { slug } = await params;
-  const room = INITIAL_ROOMS_DATA.find(
+  const room = getServerRoomBySlug(slug) || INITIAL_ROOMS_DATA.find(
     (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
   );
 
@@ -48,7 +50,8 @@ export default async function RoomDetailPage({ params }: Props) {
     notFound();
   }
 
-  const otherRooms = INITIAL_ROOMS_DATA.filter((r) => r.slug !== slug).slice(0, 3);
+  const allRooms = getServerRoomsData();
+  const otherRooms = allRooms.filter((r) => r.slug !== slug).slice(0, 3);
 
   const jsonLd = {
     '@context': 'https://schema.org',
