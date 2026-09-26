@@ -18,7 +18,7 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Public routes (including booking, rooms, restaurant, gym) NEVER need blocking auth checks
+  // Public routes (including booking, rooms, restaurant, hall, bar-lounge) NEVER need blocking auth checks
   const isAdminRoute = pathname.startsWith('/admin');
   const isLoginPage = pathname.startsWith('/admin/login');
 

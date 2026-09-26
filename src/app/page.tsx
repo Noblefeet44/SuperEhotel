@@ -3,7 +3,7 @@ import Image from 'next/image';
 import {
   MapPin, Star, Users, Bed, ChevronRight,
   Wifi, Snowflake, Tv, Droplets, Utensils, Car,
-  Shield, Zap, ConciergeBell, Shirt, Dumbbell,
+  Shield, Zap, ConciergeBell, Shirt, CalendarCheck, Wine, Music,
   MessageCircle, Phone, ArrowRight
 } from 'lucide-react';
 import { generateWhatsAppURL, generatePhoneURL, formatPrice } from '@/lib/utils';
@@ -11,7 +11,8 @@ import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
 // Icon mapping for facilities
 const facilityIcons: Record<string, React.ReactNode> = {
-  dumbbell: <Dumbbell size={24} />,
+  event: <CalendarCheck size={24} />,
+  bar: <Wine size={24} />,
   snowflake: <Snowflake size={24} />,
   wifi: <Wifi size={24} />,
   tv: <Tv size={24} />,
@@ -105,6 +106,8 @@ const rooms = [
 ];
 
 const facilities = [
+  { name: 'Grand Event Hall', icon: 'event', description: '500-capacity banquet hall' },
+  { name: 'VIP Lounge & Bar', icon: 'bar', description: '80+ drinks & nightclub' },
   { name: 'Air Conditioning', icon: 'snowflake', description: 'Climate-controlled rooms' },
   { name: 'Free Wi-Fi', icon: 'wifi', description: 'High-speed internet access' },
   { name: 'Flat Screen TV', icon: 'tv', description: 'Modern TVs with cable' },
@@ -377,7 +380,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══════════════════════════════════════════
-          GYM & FITNESS PREVIEW
+          GRAND EVENT & BANQUET HALL SHOWCASE
           ═══════════════════════════════════════════ */}
       <section className="section-padding" style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border-light)' }}>
         <div className="section-container">
@@ -388,27 +391,77 @@ export default function HomePage() {
             alignItems: 'center',
           }}>
             <div>
-              <p className="section-label">Fitness & Wellness</p>
-              <h2 className="section-title">State-of-the-Art Gym & Fitness Hall</h2>
+              <p className="section-label">Events &amp; Banquets</p>
+              <h2 className="section-title">Grand Event &amp; Banquet Hall</h2>
               <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
               <p className="section-description" style={{ margin: '0 0 var(--space-lg) 0', textAlign: 'left' }}>
-                Stay fit during your stay with our modern, fully equipped fitness center. Featuring top cardio equipment, free weights, certified trainers, and dedicated ladies aerobics fitness studio.
+                Keffi’s premier venue for wedding receptions, corporate conferences, AGMs, seminars, and celebratory banquets. Accommodates up to <strong>500 guests</strong> with full air conditioning, guaranteed 24/7 industrial standby power, elevated presentation stage, acoustic PA system, and secure VIP parking.
               </p>
               <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
-                <Link href="/gym" className="btn btn-accent">
-                  <Dumbbell size={18} />
-                  Explore Gym & Packages
+                <Link href="/hall" className="btn btn-accent">
+                  <CalendarCheck size={18} />
+                  Explore Hall &amp; Packages
                 </Link>
+                <a
+                  href={generateWhatsAppURL('07066472533', 'Hello! I would like to inquire about booking your Event Hall for an upcoming event.')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-whatsapp"
+                >
+                  <MessageCircle size={18} />
+                  Inquire on WhatsApp
+                </a>
               </div>
             </div>
 
-            <div style={{ position: 'relative', height: '300px', borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+            <div style={{ position: 'relative', height: '340px', borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--color-border)', boxShadow: '0 10px 25px rgba(0,0,0,0.06)' }}>
               <Image
-                src="/images/gym-hall.png"
-                alt="Super E Gym Fitness Hall"
+                src="/images/event-hall-banquet.jpg"
+                alt="Super E Grand Event and Banquet Hall Keffi"
                 fill
                 style={{ objectFit: 'cover' }}
               />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          VIP LOUNGE, BAR & NIGHTCLUB SHOWCASE
+          ═══════════════════════════════════════════ */}
+      <section className="section-padding" style={{ background: 'var(--color-background)', borderTop: '1px solid var(--color-border-light)' }}>
+        <div className="section-container">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: 'var(--space-2xl)',
+            alignItems: 'center',
+          }}>
+            <div style={{ position: 'relative', height: '340px', borderRadius: 'var(--radius-xl)', overflow: 'hidden', border: '1px solid var(--color-border)', boxShadow: '0 10px 25px rgba(0,0,0,0.06)' }}>
+              <Image
+                src="/images/vip-lounge-bar.jpg"
+                alt="Super E VIP Lounge and Stocked Bar Keffi"
+                fill
+                style={{ objectFit: 'cover' }}
+              />
+            </div>
+
+            <div>
+              <p className="section-label">Nightlife &amp; Relaxation</p>
+              <h2 className="section-title">VIP Lounge, Stocked Bar &amp; Club</h2>
+              <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+              <p className="section-description" style={{ margin: '0 0 var(--space-lg) 0', textAlign: 'left' }}>
+                Unwind in our plush executive lounge or explore our official digitized menu of over <strong>80+ stocked beverages</strong> — frosty cold beers from ₦1,300, premium aged Scotches, VSOP cognacs, Spanish red wines, and champagnes. On weekends, turn up the energy with our resident DJ and VIP bottle service.
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+                <Link href="/bar-lounge" className="btn btn-primary">
+                  <Wine size={18} />
+                  View 80+ Drinks &amp; Lounge
+                </Link>
+                <Link href="/bar-lounge#drinks-catalog" className="btn btn-outline">
+                  Browse Drinks Catalog
+                </Link>
+              </div>
             </div>
           </div>
         </div>

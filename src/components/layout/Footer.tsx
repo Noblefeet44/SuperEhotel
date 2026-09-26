@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { MapPin, Phone, Mail, Clock, ShieldCheck } from 'lucide-react';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { HOTEL_INFO, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
@@ -10,8 +11,14 @@ import { generateWhatsAppURL, generatePhoneURL } from '@/lib/utils';
 import { HotelPoliciesModal } from '@/components/common/HotelPoliciesModal';
 
 export function Footer() {
+  const pathname = usePathname();
   const currentYear = new Date().getFullYear();
   const [showPolicies, setShowPolicies] = useState(false);
+
+  // Do not render public footer inside admin dashboard
+  if (pathname?.startsWith('/admin')) {
+    return null;
+  }
   const [socialLinks, setSocialLinks] = useState({
     facebook: '',
     instagram: '',
@@ -182,8 +189,9 @@ export function Footer() {
               <h4>Quick Navigation</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                 <Link href="/rooms">Rooms &amp; Rates (8 Categories)</Link>
+                <Link href="/hall">Event &amp; Banquet Hall</Link>
                 <Link href="/restaurant">Restaurant &amp; Dining</Link>
-                <Link href="/gym">Gym &amp; Fitness Center</Link>
+                <Link href="/bar-lounge">VIP Lounge &amp; Bar</Link>
                 <Link href="/facilities">Hotel Facilities</Link>
                 <Link href="/about">About Super E</Link>
                 <Link href="/contact">Location &amp; Contact</Link>

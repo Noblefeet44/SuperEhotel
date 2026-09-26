@@ -31,10 +31,12 @@ const initialMediaItems: MediaItem[] = [
   { id: '9', name: 'Hotel Lobby', url: '/images/hotel-lobby.jpg', size: '959 KB', category: 'Interior' },
   { id: '10', name: 'Restaurant Interior', url: '/images/restaurant-interior.jpg', size: '960 KB', category: 'Restaurant' },
   { id: '11', name: 'Nigerian Food Jollof', url: '/images/nigerian-food.jpg', size: '863 KB', category: 'Food' },
-  { id: '12', name: 'Gym Studio', url: '/images/gym-studio.png', size: '875 KB', category: 'Gym' },
+  { id: '12', name: 'Event Hall Banquet', url: '/images/event-hall-banquet.jpg', size: '1.05 MB', category: 'Event Hall' },
+  { id: '13', name: 'VIP Lounge & Bar', url: '/images/vip-lounge-bar.jpg', size: '903 KB', category: 'Lounge' },
+  { id: '14', name: 'Club Nightlife', url: '/images/club-nightlife.jpg', size: '928 KB', category: 'Lounge' },
 ];
 
-const CATEGORIES = ['All', 'Rooms', 'Exterior', 'Interior', 'Restaurant', 'Food', 'Gym'];
+const CATEGORIES = ['All', 'Rooms', 'Exterior', 'Interior', 'Restaurant', 'Food', 'Event Hall', 'Lounge'];
 
 export default function AdminMediaPage() {
   const router = useRouter();
@@ -224,7 +226,7 @@ export default function AdminMediaPage() {
             {/* Target Category Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', justifyContent: 'center' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Category:</span>
-              {['Rooms', 'Exterior', 'Restaurant', 'Interior', 'Gym'].map((cat) => (
+              {['Rooms', 'Exterior', 'Restaurant', 'Interior', 'Event Hall', 'Lounge'].map((cat) => (
                 <button
                   key={cat}
                   type="button"

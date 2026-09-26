@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Bed, CalendarCheck, UtensilsCrossed,
-  Dumbbell, Star, Image as ImageIcon, Settings,
+  Star, Image as ImageIcon, Settings,
   LogOut, Menu, X, ArrowLeft, Building2, FileText,
   MessageCircle, ExternalLink, Grid, Sparkles, UploadCloud,
   ChevronRight, PhoneCall, ShieldCheck
@@ -67,12 +67,12 @@ export const ADMIN_FEATURES = [
     bg: '#FFFBEB',
   },
   {
-    href: '/admin/gym',
-    title: 'Gym & Fitness',
-    subtitle: 'Plans, equipment & passes',
-    icon: Dumbbell,
-    color: '#06B6D4',
-    bg: '#ECFEFF',
+    href: '/admin/hall',
+    title: 'Hall Bookings',
+    subtitle: 'Reservations, calendar & rates',
+    icon: CalendarCheck,
+    color: '#8B5CF6',
+    bg: '#F5F3FF',
   },
   {
     href: '/admin/facilities',
@@ -378,55 +378,80 @@ export function AdminMobileNav({ title = 'Admin Panel', subtitle, backHref, acti
                     onClick={() => setLauncherOpen(false)}
                     style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      padding: '0.75rem 0.6rem',
-                      borderRadius: '16px',
-                      backgroundColor: isActive ? '#EFF6FF' : '#F8FAFC',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      padding: '0.65rem 0.65rem',
+                      borderRadius: '14px',
+                      backgroundColor: isActive ? '#EFF6FF' : '#FFFFFF',
                       border: isActive ? '2px solid #3B82F6' : '1px solid #E2E8F0',
                       textDecoration: 'none',
-                      position: 'relative',
-                      transition: 'all 0.15s ease',
-                      minWidth: 0,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                       boxSizing: 'border-box',
-                      overflow: 'hidden',
+                      minWidth: 0,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-                      <div
-                        style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '12px',
-                          backgroundColor: item.bg,
-                          color: item.color,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Icon size={22} />
-                      </div>
-                      {item.badge && (
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '10px',
+                        backgroundColor: item.bg,
+                        color: item.color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={20} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'space-between' }}>
                         <span
                           style={{
-                            fontSize: '0.62rem',
-                            fontWeight: 700,
-                            padding: '0.15rem 0.4rem',
-                            borderRadius: '9999px',
-                            backgroundColor: item.color,
-                            color: '#FFFFFF',
+                            fontSize: '0.82rem',
+                            fontWeight: 800,
+                            color: '#0F172A',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: 1.2,
+                            display: 'block',
                           }}
                         >
-                          {item.badge}
+                          {item.title}
                         </span>
-                      )}
+                        {item.badge && (
+                          <span
+                            style={{
+                              fontSize: '0.55rem',
+                              fontWeight: 700,
+                              padding: '0.1rem 0.35rem',
+                              borderRadius: '9999px',
+                              backgroundColor: item.color,
+                              color: '#FFFFFF',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '0.67rem',
+                          color: '#64748B',
+                          lineHeight: 1.2,
+                          marginTop: '2px',
+                          display: 'block',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {item.subtitle}
+                      </span>
                     </div>
-                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#0F172A', marginBottom: '2px' }}>
-                      {item.title}
-                    </span>
-                    <span style={{ fontSize: '0.68rem', color: '#64748B', lineHeight: 1.25 }}>
-                      {item.subtitle}
-                    </span>
                   </Link>
                 );
               })}

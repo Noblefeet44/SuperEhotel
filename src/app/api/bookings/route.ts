@@ -24,8 +24,15 @@ export interface StoredBooking {
   paymentAccountName: string;
   receiptImage?: string;
   receiptFileName?: string;
-  status: 'new' | 'awaiting_confirmation' | 'confirmed' | 'checked_in' | 'cancelled';
-  paymentStatus: 'not_paid' | 'awaiting_payment' | 'paid';
+  status: 'new' | 'awaiting_confirmation' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled';
+  paymentStatus: 'not_paid' | 'awaiting_payment' | 'partially_paid' | 'paid';
+  paymentMethod?: 'cash' | 'pos_debit_card' | 'bank_transfer' | 'split' | 'pay_later';
+  paymentReference?: string;
+  amountPaid?: number;
+  balanceDue?: number;
+  roomNumber?: string;
+  isWalkIn?: boolean;
+  cashierName?: string;
   adminNotes?: string;
   createdAt: string;
 }
@@ -96,6 +103,13 @@ export async function GET() {
           nights: b.total_nights || 1,
           numGuests: b.num_guests || 1,
           totalAmount: Number(b.total_amount) || 0,
+          paymentMethod: b.payment_method || 'transfer',
+          paymentReference: b.payment_reference || '',
+          amountPaid: Number(b.amount_paid) || Number(b.total_amount) || 0,
+          balanceDue: Number(b.balance_due) || 0,
+          roomNumber: b.room_number || '',
+          isWalkIn: Boolean(b.is_walk_in),
+          cashierName: b.cashier_name || '',
           specialRequests: b.special_requests || '',
           paymentBank: 'Moniepoint Microfinance Bank',
           paymentAccountNumber: '5326187865',
@@ -132,6 +146,10 @@ export async function POST(request: Request) {
     }
 
     const ref = body.ref || `SE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const totalAmt = Number(body.totalAmount) || 0;
+    const amtPaid = Number(body.amountPaid ?? totalAmt);
+    const balDue = Number(body.balanceDue ?? Math.max(0, totalAmt - amtPaid));
+
     const newBooking: StoredBooking = {
       id: body.id || `b_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       ref,
@@ -145,15 +163,22 @@ export async function POST(request: Request) {
       checkOut: body.checkOut,
       nights: Number(body.nights) || 1,
       numGuests: Number(body.numGuests) || 1,
-      totalAmount: Number(body.totalAmount) || 0,
+      totalAmount: totalAmt,
+      paymentMethod: body.paymentMethod || (body.isWalkIn ? 'cash' : 'transfer'),
+      paymentReference: body.paymentReference || '',
+      amountPaid: amtPaid,
+      balanceDue: balDue,
+      roomNumber: body.roomNumber || '',
+      isWalkIn: Boolean(body.isWalkIn),
+      cashierName: body.cashierName || (body.isWalkIn ? 'Front Desk Cashier' : ''),
       specialRequests: body.specialRequests || '',
       paymentBank: body.paymentBank || 'Moniepoint Microfinance Bank',
       paymentAccountNumber: body.paymentAccountNumber || '5326187865',
       paymentAccountName: body.paymentAccountName || 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION',
       receiptImage: body.receiptImage || '',
       receiptFileName: body.receiptFileName || '',
-      status: 'awaiting_confirmation',
-      paymentStatus: 'paid',
+      status: body.status || (body.isWalkIn ? 'confirmed' : 'awaiting_confirmation'),
+      paymentStatus: body.paymentStatus || (balDue <= 0 ? 'paid' : amtPaid > 0 ? 'partial' : 'pending'),
       createdAt: new Date().toISOString(),
     };
 

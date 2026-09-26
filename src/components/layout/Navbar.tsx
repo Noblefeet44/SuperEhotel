@@ -12,8 +12,9 @@ import { HotelPoliciesModal } from '@/components/common/HotelPoliciesModal';
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/rooms', label: 'Rooms & Rates' },
+  { href: '/hall', label: 'Event Hall' },
   { href: '/restaurant', label: 'Restaurant' },
-  { href: '/gym', label: 'Gym & Fitness' },
+  { href: '/bar-lounge', label: 'Lounge & Bar' },
   { href: '/facilities', label: 'Facilities' },
   { href: '/about', label: 'About' },
   { href: '/contact', label: 'Contact' },
@@ -45,6 +46,11 @@ export function Navbar() {
     }
     setMobileMenuOpen(false);
   };
+
+  // Do not render public Navbar on admin routes
+  if (pathname?.startsWith('/admin')) {
+    return null;
+  }
 
   return (
     <>

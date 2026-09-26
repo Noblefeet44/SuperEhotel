@@ -803,6 +803,18 @@ img {
    NAVIGATION
    ===================================================== */
 
+/* Prevent public navbar, footer, and mobile CTA from ever showing inside admin pages */
+body:has(.admin-layout) .navbar,
+body:has(.admin-layout) .footer,
+body:has(.admin-layout) .mobile-cta-bar,
+body:has(.admin-root-container) .navbar,
+body:has(.admin-root-container) .footer,
+body:has(.admin-root-container) .mobile-cta-bar {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .navbar {
   position: fixed;
   top: 0;

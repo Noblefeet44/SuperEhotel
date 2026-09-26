@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
-import { MobileCTA } from "@/components/layout/MobileCTA";
+import { PublicLayoutWrapper } from "@/components/layout/PublicLayoutWrapper";
 
 export const viewport: Viewport = {
   themeColor: "#1E3A8A",
@@ -17,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | Super E Luxury Hotel & Suites Keffi",
   },
   description:
-    "Best luxury hotel in Keffi, Nasarawa State, Nigeria. Premium rooms from ₦36,000/night with 24/7 power, free Wi-Fi, fine Nigerian dining, gym & fitness center. Near Nasarawa State University (NSUK). Book your stay today.",
+    "Best luxury hotel in Keffi, Nasarawa State, Nigeria. 8 luxury room categories from ₦36,000/night with 24/7 power, free Wi-Fi, fine Nigerian dining, 500-capacity Grand Event & Banquet Hall, and VIP Lounge & Bar. Near NSUK.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -37,11 +35,24 @@ export const metadata: Metadata = {
     "hotels in Keffi Nasarawa State",
     "luxury hotel Keffi Nigeria",
     "hotel in Keffi Nasarawa",
+    // Event Hall & Banquets SEO
+    "event hall in keffi",
+    "wedding reception hall in keffi",
+    "conference hall keffi nasarawa",
+    "hall for rent keffi",
+    "banquet hall booking keffi",
+    "event center near nasarawa state university nsuk",
+    "meeting room keffi",
+    "party hall rental keffi",
     // Proximity & context keywords
     "hotel near Nasarawa State University Keffi",
     "hotel near NSUK Keffi",
     "hotel near Abuja-Keffi Expressway",
     "Keffi GRA hotel",
+    // Lounge & Bar
+    "vip lounge keffi",
+    "bar and lounge in keffi",
+    "nightlife in keffi",
     // Intent-based keywords
     "book hotel in Keffi",
     "accommodation in Keffi",
@@ -50,7 +61,7 @@ export const metadata: Metadata = {
     "business hotel Keffi Nigeria",
     // Amenity keywords
     "hotel with restaurant Keffi",
-    "hotel with gym Keffi",
+    "hotel with event hall Keffi",
     "hotel with 24/7 power supply Keffi",
     "hotel with free WiFi Keffi",
     // Room type keywords
@@ -67,9 +78,9 @@ export const metadata: Metadata = {
     canonical: 'https://supereluxuryhotel.com',
   },
   openGraph: {
-    title: "Super E Luxury Hotel & Suites | Best Hotel in Keffi, Nigeria",
+    title: "Super E Luxury Hotel & Suites | Best Hotel & Event Hall in Keffi",
     description:
-      "Premium luxury accommodation in Keffi, Nasarawa State. 8 room categories from ₦36,000/night. Fine Nigerian dining, gym, 24/7 power & security. Near NSUK.",
+      "Premium luxury accommodation in Keffi, Nasarawa State. 8 room categories from ₦36,000/night, 500-capacity Grand Event Hall, VIP Lounge & Bar, 24/7 power & security. Near NSUK.",
     type: "website",
     locale: "en_NG",
     siteName: "Super E Luxury Hotel & Suites",
@@ -85,8 +96,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Super E Luxury Hotel & Suites | Best Hotel in Keffi, Nigeria",
-    description: "Premium luxury accommodation in Keffi, Nasarawa State. 8 room categories from ₦36,000/night. Fine Nigerian dining, gym, 24/7 power & security.",
+    title: "Super E Luxury Hotel & Suites | Best Hotel & Event Hall in Keffi",
+    description: "Premium luxury accommodation in Keffi, Nasarawa State. 8 room categories from ₦36,000/night, 500-capacity Event Hall, VIP Lounge & Bar, 24/7 power & security.",
     images: ['/images/hotel-exterior.jpg'],
   },
   robots: {
@@ -104,10 +115,10 @@ export const metadata: Metadata = {
 
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "Hotel",
+  "@type": ["Hotel", "EventVenue"],
   "name": "Super E Luxury Hotel & Suites",
-  "alternateName": "Super E Hotel Keffi",
-  "description": "Best luxury hotel in Keffi, Nasarawa State, Nigeria. Premium rooms from ₦36,000/night with 24/7 power supply, free Wi-Fi, fine Nigerian dining, gym & fitness center. Near Nasarawa State University (NSUK).",
+  "alternateName": "Super E Hotel & Event Center Keffi",
+  "description": "Best luxury hotel and event center in Keffi, Nasarawa State, Nigeria. 8 luxury room categories from ₦36,000/night, 500-capacity Grand Event Hall with 24/7 power supply, free Wi-Fi, fine Nigerian dining, and VIP Lounge & Bar. Near Nasarawa State University (NSUK).",
   "url": "https://supereluxuryhotel.com",
   "telephone": ["+2347066472533", "+2349072069217"],
   "email": "supereluxuryhotelandsuites@gmail.com",
@@ -134,6 +145,7 @@ const jsonLd = {
     "ratingValue": "5"
   },
   "numberOfRooms": 8,
+  "maximumAttendeeCapacity": 500,
   "checkinTime": "14:00",
   "checkoutTime": "12:00",
   "amenityFeature": [
@@ -141,7 +153,8 @@ const jsonLd = {
     { "@type": "LocationFeatureSpecification", "name": "Air Conditioning", "value": true },
     { "@type": "LocationFeatureSpecification", "name": "24/7 Security & Power Supply", "value": true },
     { "@type": "LocationFeatureSpecification", "name": "Fine Dining Restaurant", "value": true },
-    { "@type": "LocationFeatureSpecification", "name": "Gym & Fitness Center", "value": true },
+    { "@type": "LocationFeatureSpecification", "name": "Grand Event & Banquet Hall (500 capacity)", "value": true },
+    { "@type": "LocationFeatureSpecification", "name": "VIP Lounge & Stocked Bar", "value": true },
     { "@type": "LocationFeatureSpecification", "name": "Room Service", "value": true },
     { "@type": "LocationFeatureSpecification", "name": "Secure Parking", "value": true },
     { "@type": "LocationFeatureSpecification", "name": "Laundry Service", "value": true }
@@ -175,6 +188,14 @@ const faqJsonLd = {
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Yes, Super E Luxury Hotel is located in Keffi G.R.A., conveniently close to Nasarawa State University (NSUK) and accessible from the Abuja-Keffi Expressway."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Super E Hotel have an event hall for weddings and conferences?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, Super E Luxury Hotel features a 500-guest capacity Grand Event & Banquet Hall equipped with industrial AC, 24/7 backup power, acoustic stage, pro sound system, and secure parking in Keffi."
       }
     },
     {
@@ -214,10 +235,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
-        <MobileCTA />
+        <PublicLayoutWrapper>{children}</PublicLayoutWrapper>
       </body>
     </html>
   );

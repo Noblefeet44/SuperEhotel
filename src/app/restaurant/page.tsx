@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   Utensils, MessageCircle, Clock, Star, Plus, Minus,
-  ShoppingBag, Check, Send, Phone, User
+  ShoppingBag, Check, Send, Phone, User, ArrowRight
 } from 'lucide-react';
 import { formatPrice, generateWhatsAppURL, cn } from '@/lib/utils';
 
@@ -313,6 +313,40 @@ Please confirm my meal order and preparation time. Thank you!`;
               </div>
             </div>
           ))}
+
+          {/* Full Drinks Menu & Bar Banner */}
+          <div
+            style={{
+              borderRadius: '18px',
+              padding: 'clamp(1.5rem, 3vw, 2.5rem)',
+              color: '#FFFFFF',
+              marginTop: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.06)',
+            }}
+          >
+            <span style={{ color: '#FCD34D', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+              Full Drinks &amp; Wine Cellar Menu
+            </span>
+            <h3 style={{ color: '#FFFFFF', fontSize: 'clamp(1.25rem, 3vw, 1.8rem)', fontWeight: 800, marginBottom: '0.75rem' }}>
+              Looking for Cold Beers, Fine Whiskeys, Wine or Spirits?
+            </h3>
+            <p style={{ color: 'rgba(255,255,255,0.85)', maxWidth: '640px', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+              Explore our complete digitized drinks catalog with over 80+ cold beers, aged Scotch, VSOP cognacs, Hennessy, Jameson, Star Radler, Heineken, Non-Alcoholic and Spanish Red Wines directly from the official hotel price boards.
+            </p>
+            <Link
+              href="/bar-lounge#drinks-catalog"
+              className="btn btn-accent btn-lg"
+              style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              View Full 80+ Drinks Catalog &amp; Prices <ArrowRight size={18} />
+            </Link>
+          </div>
         </div>
       </section>
 

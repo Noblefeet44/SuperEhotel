@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CalendarCheck, Bed, Utensils, Building2,
   Star, Settings, Image as ImageIcon, FileText, Menu, X,
-  LogOut, ChevronRight, MessageCircle, Dumbbell,
+  LogOut, ChevronRight, MessageCircle, UserPlus,
   UserCheck, CreditCard, Clock, AlertCircle, TrendingUp,
   UploadCloud, Phone, CheckCircle2, ArrowRight, Sparkles, ExternalLink
 } from 'lucide-react';
@@ -19,7 +19,7 @@ const sidebarLinks = [
   { href: '/admin/bookings', label: 'Bookings', icon: <CalendarCheck size={20} /> },
   { href: '/admin/rooms', label: 'Rooms', icon: <Bed size={20} /> },
   { href: '/admin/restaurant', label: 'Restaurant', icon: <Utensils size={20} /> },
-  { href: '/admin/gym', label: 'Gym & Fitness', icon: <Dumbbell size={20} /> },
+  { href: '/admin/hall', label: 'Hall Bookings', icon: <Sparkles size={20} /> },
   { href: '/admin/facilities', label: 'Facilities', icon: <Building2 size={20} /> },
   { href: '/admin/reviews', label: 'Reviews', icon: <Star size={20} /> },
   { href: '/admin/media', label: 'Media', icon: <ImageIcon size={20} /> },
@@ -175,7 +175,32 @@ export default function AdminDashboardPage() {
   return (
     <div className="admin-layout" style={{ maxWidth: '100vw', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
       {/* Mobile Top Navigation */}
-      <AdminMobileNav title="Dashboard" subtitle={HOTEL_INFO.name} />
+      <AdminMobileNav
+        title="Dashboard"
+        subtitle={HOTEL_INFO.name}
+        actionButton={
+          <Link
+            href="/admin/bookings?walkin=true"
+            style={{
+              background: 'linear-gradient(135deg, #16A34A 0%, #15803D 100%)',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0.35rem 0.6rem',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              textDecoration: 'none',
+              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.35)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <UserPlus size={13} /> + Walk-In
+          </Link>
+        }
+      />
 
       {/* Sidebar Overlay (mobile) */}
       {sidebarOpen && (
@@ -281,8 +306,21 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Quick 3-Action Buttons Strip */}
+            {/* Quick Action Buttons Strip */}
             <div className="admin-app-quick-strip">
+              <Link
+                href="/admin/bookings?walkin=true"
+                className="app-quick-pill"
+                style={{
+                  backgroundColor: 'rgba(34, 197, 94, 0.35)',
+                  borderColor: 'rgba(34, 197, 94, 0.6)',
+                  color: '#FFFFFF',
+                  fontWeight: 800,
+                }}
+              >
+                <UserPlus size={16} />
+                <span>+ Walk-In</span>
+              </Link>
               <Link href="/admin/bookings" className="app-quick-pill primary">
                 <CalendarCheck size={16} />
                 <span>Check Bookings</span>
@@ -327,6 +365,18 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="admin-app-grid">
+              {/* Feature 0: Front Desk Walk-in Booking */}
+              <Link href="/admin/bookings?walkin=true" className="app-tile-btn">
+                <div className="tile-icon-box" style={{ background: '#DCFCE7', color: '#16A34A' }}>
+                  <UserPlus size={24} />
+                </div>
+                <div className="tile-info">
+                  <span className="tile-title">Front Desk Walk-In</span>
+                  <span className="tile-sub">Book walk-in guests with POS &amp; cash</span>
+                </div>
+                <span className="tile-badge-pill" style={{ backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800 }}>Front Desk</span>
+              </Link>
+
               {/* Feature 1: Check & Manage Bookings */}
               <Link href="/admin/bookings" className="app-tile-btn">
                 <div className="tile-icon-box" style={{ background: '#ECFDF5', color: '#10B981' }}>
@@ -376,14 +426,14 @@ export default function AdminDashboardPage() {
                 </div>
               </Link>
 
-              {/* Feature 5: Gym & Fitness */}
-              <Link href="/admin/gym" className="app-tile-btn">
-                <div className="tile-icon-box" style={{ background: '#ECFEFF', color: '#06B6D4' }}>
-                  <Dumbbell size={24} />
+              {/* Feature 5: Event & Banquet Hall */}
+              <Link href="/admin/hall" className="app-tile-btn">
+                <div className="tile-icon-box" style={{ background: '#F5F3FF', color: '#8B5CF6' }}>
+                  <Sparkles size={24} />
                 </div>
                 <div className="tile-info">
-                  <span className="tile-title">Gym &amp; Fitness</span>
-                  <span className="tile-sub">Memberships &amp; passes</span>
+                  <span className="tile-title">Hall Bookings</span>
+                  <span className="tile-sub">Events, dates &amp; rates</span>
                 </div>
               </Link>
 
@@ -459,6 +509,14 @@ export default function AdminDashboardPage() {
               <h1>Dashboard Overview</h1>
             </div>
             <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+              <Link
+                href="/admin/bookings?walkin=true"
+                className="btn btn-primary btn-sm"
+                style={{ backgroundColor: '#16A34A', borderColor: '#16A34A' }}
+              >
+                <UserPlus size={16} />
+                <span>+ Walk-In Booking</span>
+              </Link>
               <Link href="/admin/rooms" className="btn btn-primary btn-sm">
                 <Bed size={16} />
                 <span>Manage Rooms &amp; Inventory</span>
