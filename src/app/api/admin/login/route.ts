@@ -12,15 +12,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const DEFAULT_SUPABASE_URL = 'https://abiavsgmbokwyxlahhyt.supabase.co';
+    const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiaWF2c2dtYm9rd3l4bGFoaHl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMDgwODEsImV4cCI6MjEwNjU4NDA4MX0.Yb_8sO0E3ruQJl3lEXe09vomaJOmqdRlc3dT6e3offY';
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { success: false, error: 'Server configuration error' },
-        { status: 500 }
-      );
-    }
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
     const masterEmail = (process.env.ADMIN_EMAIL || 'admin@superehotel.com').toLowerCase().trim();
     const masterPassword = (process.env.ADMIN_PASSWORD || 'SuperE2026').trim();

@@ -13,13 +13,13 @@ function isUrlValid(url?: string): boolean {
 export function createClient() {
   const url = isUrlValid(process.env.NEXT_PUBLIC_SUPABASE_URL)
     ? process.env.NEXT_PUBLIC_SUPABASE_URL!
-    : 'https://placeholder.supabase.co';
+    : 'https://abiavsgmbokwyxlahhyt.supabase.co';
 
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.includes('your-supabase')
       ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2Nzg4ODg4ODgsImV4cCI6MjA5NDQ2NDg4OH0.placeholder';
+      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiaWF2c2dtYm9rd3l4bGFoaHl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMDgwODEsImV4cCI6MjEwNjU4NDA4MX0.Yb_8sO0E3ruQJl3lEXe09vomaJOmqdRlc3dT6e3offY';
 
   return createBrowserClient(url, key);
 }
