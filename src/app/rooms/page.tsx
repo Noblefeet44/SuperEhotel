@@ -10,7 +10,7 @@ import {
 import { formatPrice } from '@/lib/utils';
 import {
   RoomCategoryData, HOTEL_INFO,
-  getStoredRoomsData
+  getStoredRoomsData, saveStoredRoomsData
 } from '@/lib/hotel-data';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 import { HotelPoliciesModal } from '@/components/common/HotelPoliciesModal';

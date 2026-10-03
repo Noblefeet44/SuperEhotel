@@ -20,6 +20,7 @@ import {
   OFFICIAL_BANK_ACCOUNT,
   INITIAL_ROOMS_DATA,
   getStoredRoomsData,
+  saveStoredRoomsData,
   RoomCategoryData
 } from '@/lib/hotel-data';
 

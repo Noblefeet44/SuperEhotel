@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Users, Bed, ChevronRight } from 'lucide-react';
-import { RoomCategoryData, getStoredRoomsData, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
+import { RoomCategoryData, getStoredRoomsData, saveStoredRoomsData, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 import { formatPrice } from '@/lib/utils';
 

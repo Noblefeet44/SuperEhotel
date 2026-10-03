@@ -83,13 +83,13 @@
         "id": "dlx-201",
         "roomNumber": "201",
         "floor": "2nd Floor",
-        "status": "available"
+        "status": "booked"
       },
       {
         "id": "dlx-202",
         "roomNumber": "202",
         "floor": "2nd Floor",
-        "status": "available"
+        "status": "maintenance"
       },
       {
         "id": "dlx-203",
