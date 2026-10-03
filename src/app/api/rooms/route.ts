@@ -133,11 +133,14 @@ export async function GET() {
       const { data, error } = await Promise.race([supabasePromise, timeoutPromise]);
 
       if (!error && data && data.length > 0) {
-        // Merge Supabase data — Supabase is the source of truth for photos
+        // Merge Supabase data — Supabase is the source of truth for photos.
+        // Use priority match: exact slug wins over -room suffix variant (seed data).
         const mergedRooms = localRooms.map((local) => {
-          const match = data.find(
-            (r: any) => r.slug === local.slug || r.slug === `${local.slug}-room` || r.name.toLowerCase() === local.name.toLowerCase()
-          );
+          const match =
+            data.find((r: any) => r.slug === local.slug) ||
+            data.find((r: any) => (r.name || '').toLowerCase() === local.name.toLowerCase()) ||
+            data.find((r: any) => r.slug === `${local.slug}-room`);
+
           if (!match) return local;
 
           // Supabase photos are authoritative (admin uploads/deletions persist there)
@@ -145,7 +148,6 @@ export async function GET() {
             ? match.photos
             : (local.images && local.images.length > 0 ? local.images : [local.image]);
 
-          // Keep official rate if Supabase has outdated old seed (< 36000 for standard)
           const price = (match.price_per_night && Number(match.price_per_night) >= local.price * 0.7)
             ? Number(match.price_per_night)
             : local.price;
@@ -156,7 +158,6 @@ export async function GET() {
             image: photos[0],
             images: photos,
             status: match.status || local.status || 'available',
-            units: (local.units && local.units.length > 0) ? local.units : local.units,
           };
         });
 
@@ -277,12 +278,11 @@ export async function POST(request: Request) {
 
     saveRooms(updatedRooms);
 
-    // Sync to Supabase in background if configured
+    // Sync to Supabase — update ALL slug variants so the seed rows stay in sync
     const supabase = getSupabase();
     if (supabase) {
       try {
-        const updateData: any = {
-          slug: roomPayload.slug,
+        const photoData = {
           name: roomPayload.name,
           price_per_night: roomPayload.price,
           status: roomPayload.status || 'available',
@@ -296,11 +296,28 @@ export async function POST(request: Request) {
         };
 
         if (isFeatured !== undefined) {
-          updateData.is_featured = Boolean(isFeatured);
+          (photoData as any).is_featured = Boolean(isFeatured);
         }
 
-        // Upsert into Supabase so new rooms are inserted and existing rooms are updated
-        await supabase.from('rooms').upsert(updateData, { onConflict: 'slug' });
+        // 1. Update the exact slug row (admin-created rows)
+        await supabase.from('rooms').update(photoData).eq('slug', roomPayload.slug);
+
+        // 2. Also update the seed row which has a '-room' suffix slug
+        //    e.g. 'standard' admin slug → 'standard-room' seed slug
+        await supabase.from('rooms').update(photoData).eq('slug', `${roomPayload.slug}-room`);
+
+        // 3. If neither row exists yet, insert a new one
+        const { data: existingRows } = await supabase
+          .from('rooms')
+          .select('id')
+          .or(`slug.eq.${roomPayload.slug},slug.eq.${roomPayload.slug}-room`);
+
+        if (!existingRows || existingRows.length === 0) {
+          await supabase.from('rooms').insert({
+            slug: roomPayload.slug,
+            ...photoData,
+          });
+        }
       } catch (err) {
         console.warn('Supabase room update notice:', err);
       }
@@ -392,14 +409,14 @@ export async function DELETE(request: Request) {
     const updatedRooms = currentRooms.map((r, i) => (i === roomIndex ? updatedRoom : r));
     saveRooms(updatedRooms);
 
-    // Sync to Supabase
+    // Sync to Supabase — update ALL slug variants
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase
-          .from('rooms')
-          .update({ photos: updatedImages, updated_at: new Date().toISOString() })
-          .eq('slug', room.slug);
+        const photoPayload = { photos: updatedImages, updated_at: new Date().toISOString() };
+        // Update exact slug row AND the seed '-room' variant
+        await supabase.from('rooms').update(photoPayload).eq('slug', room.slug);
+        await supabase.from('rooms').update(photoPayload).eq('slug', `${room.slug}-room`);
       } catch (err) {
         console.warn('Supabase delete photo notice:', err);
       }

@@ -25,12 +25,13 @@ function applySupabasePhotos(
   supabaseRows: any[]
 ): RoomCategoryData[] {
   return localRooms.map((room) => {
-    const match = supabaseRows.find(
-      (r: any) =>
-        r.slug === room.slug ||
-        r.slug === `${room.slug}-room` ||
-        (r.name || '').toLowerCase() === room.name.toLowerCase()
-    );
+    // Priority match: exact slug > name match > '-room' suffix (seed data)
+    // This ensures admin-saved rows (slug='standard') beat seed rows (slug='standard-room')
+    const match =
+      supabaseRows.find((r: any) => r.slug === room.slug) ||
+      supabaseRows.find((r: any) => (r.name || '').toLowerCase() === room.name.toLowerCase()) ||
+      supabaseRows.find((r: any) => r.slug === `${room.slug}-room`);
+
     if (!match) return room;
 
     // Supabase `photos` column is the source of truth for images

@@ -434,7 +434,11 @@ export function mergeRoomsWithServer(serverRooms: RoomCategoryData[]): RoomCateg
   const localRooms = getStoredRoomsData();
 
   const merged = localRooms.map((local) => {
-    const srv = serverRooms.find((s) => s.id === local.id || s.slug === local.slug);
+    // Priority match: exact slug > name > '-room' suffix (seed rows)
+    const srv =
+      serverRooms.find((s) => s.id === local.id || s.slug === local.slug) ||
+      serverRooms.find((s) => s.name.toLowerCase() === local.name.toLowerCase()) ||
+      serverRooms.find((s) => s.slug === `${local.slug}-room`);
     if (!srv) return local;
 
     const localImgs = local.images && local.images.length > 0 ? local.images : (local.image ? [local.image] : []);
