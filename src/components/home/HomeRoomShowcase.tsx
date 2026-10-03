@@ -31,6 +31,7 @@ export function HomeRoomShowcase({ initialRooms }: HomeRoomShowcaseProps) {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
           setRooms(live);
+          saveStoredRoomsData(live);
         }
       })
       .catch((err) => console.warn('Could not fetch latest rooms:', err));

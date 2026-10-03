@@ -11,6 +11,10 @@ import { INITIAL_ROOMS_DATA, HOTEL_INFO, HOTEL_POLICIES } from '@/lib/hotel-data
 import { getServerRoomsData, getServerRoomBySlug } from '@/lib/server-rooms';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+export const revalidate = 0;
+
 interface Props {
   params: Promise<{ slug: string }>;
 }

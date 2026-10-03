@@ -26,8 +26,33 @@ function ensureRoomsFile(): RoomCategoryData[] {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      // Ensure all 8 official tiers exist and units are not empty
+      const merged: RoomCategoryData[] = INITIAL_ROOMS_DATA.map((def) => {
+        const found = parsed.find((p: any) => p.id === def.id || p.slug === def.slug || `${p.slug}-room` === def.slug);
+        if (!found) return def;
+
+        const units = Array.isArray(found.units) && found.units.length > 0 ? found.units : def.units;
+        const price = (found.price && found.price >= def.price * 0.7) ? found.price : def.price;
+
+        return {
+          ...def,
+          ...found,
+          price,
+          status: found.status || def.status || 'available',
+          units,
+        };
+      });
+
+      // Preserve any custom user-added rooms
+      const custom = parsed.filter(
+        (p: any) => !INITIAL_ROOMS_DATA.some((def) => def.id === p.id || def.slug === p.slug)
+      );
+
+      const all = [...merged, ...custom];
+      fs.writeFileSync(DATA_FILE, JSON.stringify(all, null, 2), 'utf8');
+      return all;
     }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_ROOMS_DATA, null, 2), 'utf8');
     return INITIAL_ROOMS_DATA;
   } catch (err) {
     console.error('Error reading rooms file:', err);
@@ -55,38 +80,45 @@ export async function GET() {
 
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      const supabasePromise = supabase
         .from('rooms')
         .select('*, room_categories(name, slug)')
         .order('display_order', { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        const mappedRooms: RoomCategoryData[] = data.map((r: any) => {
-          const photos = Array.isArray(r.photos) && r.photos.length > 0
-            ? r.photos
-            : ['/images/standard-room.jpg'];
+      const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 1000)
+      );
 
-          const localMatch = localRooms.find((lr) => lr.slug === r.slug || lr.id === r.id);
+      const { data, error } = await Promise.race([supabasePromise, timeoutPromise]);
+
+      if (!error && data && data.length > 0) {
+        // Merge Supabase changes without overriding photos or units from local inventory
+        const mergedRooms = localRooms.map((local) => {
+          const match = data.find(
+            (r: any) => r.slug === local.slug || r.slug === `${local.slug}-room` || r.name.toLowerCase() === local.name.toLowerCase()
+          );
+          if (!match) return local;
+
+          const photos = (local.images && Array.isArray(local.images) && local.images.length > 0)
+            ? local.images
+            : (Array.isArray(match.photos) && match.photos.length > 0 ? match.photos : [local.image]);
+
+          // Keep official rate if Supabase has outdated old seed (< 36000 for standard)
+          const price = (match.price_per_night && Number(match.price_per_night) >= local.price * 0.7)
+            ? Number(match.price_per_night)
+            : local.price;
 
           return {
-            id: r.id,
-            slug: r.slug,
-            name: r.name,
-            category: r.room_categories?.name || 'Standard',
-            price: Number(r.price_per_night) || 40000,
-            maxGuests: r.max_guests || 2,
-            bedType: r.bed_type || 'King Bed',
-            roomSize: r.room_size || '30 sqm',
+            ...local,
+            price,
             image: photos[0],
             images: photos,
-            description: r.description || '',
-            facilities: Array.isArray(r.facilities) ? r.facilities : [],
-            isFeatured: Boolean(r.is_featured),
-            units: localMatch?.units || [],
+            status: match.status || local.status || 'available',
+            units: (local.units && local.units.length > 0) ? local.units : local.units,
           };
         });
 
-        return NextResponse.json({ success: true, rooms: mappedRooms });
+        return NextResponse.json({ success: true, rooms: mergedRooms });
       }
     } catch (err) {
       console.warn('Supabase rooms query warning:', err);
@@ -100,30 +132,98 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { id, slug, name, price, maxGuests, bedType, roomSize, images, image, description, facilities, isFeatured, units } = body;
-
     const currentRooms = ensureRoomsFile();
+
+    // 1. Direct unit status change: { action: 'update_unit_status', roomId, unitId, status }
+    if (body.action === 'update_unit_status') {
+      const { roomId, unitId, status } = body;
+      const updatedRooms = currentRooms.map((r) => {
+        if (r.id !== roomId && r.slug !== roomId) return r;
+        const updatedUnits = r.units.map((u) => {
+          if (u.id !== unitId) return u;
+          return { ...u, status };
+        });
+        return { ...r, units: updatedUnits };
+      });
+      saveRooms(updatedRooms);
+      return NextResponse.json({ success: true, message: `Unit updated to ${status}`, rooms: updatedRooms });
+    }
+
+    // 2. Batch mark all units in a tier: { action: 'mark_all_units', roomId, status }
+    if (body.action === 'mark_all_units') {
+      const { roomId, status } = body;
+      const updatedRooms = currentRooms.map((r) => {
+        if (r.id !== roomId && r.slug !== roomId) return r;
+        const updatedUnits = r.units.map((u) => ({ ...u, status }));
+        return { ...r, status, units: updatedUnits };
+      });
+      saveRooms(updatedRooms);
+      return NextResponse.json({ success: true, message: `All units marked as ${status}`, rooms: updatedRooms });
+    }
+
+    // 3. Update room tier status: { action: 'update_tier_status', roomId, status }
+    if (body.action === 'update_tier_status') {
+      const { roomId, status } = body;
+      const updatedRooms = currentRooms.map((r) => {
+        if (r.id !== roomId && r.slug !== roomId) return r;
+        return { ...r, status };
+      });
+      saveRooms(updatedRooms);
+      return NextResponse.json({ success: true, message: `Tier status updated to ${status}`, rooms: updatedRooms });
+    }
+
+    // 4. Save entire rooms array: { action: 'save_all', rooms }
+    if (body.action === 'save_all' && Array.isArray(body.rooms)) {
+      saveRooms(body.rooms);
+      return NextResponse.json({ success: true, message: 'All inventory saved', rooms: body.rooms });
+    }
+
+    // 5. Normal single room category update / insert
+    const { id, slug, name, price, maxGuests, bedType, roomSize, images, image, description, facilities, isFeatured, units, status } = body;
+
+    const trimmedName = (name || '').trim();
+
+    const cleanSlug = slug && !slug.startsWith('new-tier-')
+      ? slug
+      : (trimmedName ? trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : `room-${Date.now()}`);
+
+    const cleanId = id && !id.startsWith('tier-') ? id : cleanSlug;
+
     const photos = images && Array.isArray(images) && images.length > 0
-      ? images
+      ? images.filter(Boolean)
       : (image ? [image] : ['/images/standard-room.jpg']);
 
-    const targetRoomIndex = currentRooms.findIndex((r) => r.slug === slug || r.id === id);
+    const targetRoomIndex = currentRooms.findIndex((r) => r.slug === cleanSlug || r.id === cleanId || r.slug === slug || r.id === id);
+
+    const roomUnits = (Array.isArray(units) && units.length > 0)
+      ? units
+      : (targetRoomIndex >= 0 && Array.isArray(currentRooms[targetRoomIndex].units) && currentRooms[targetRoomIndex].units.length > 0
+          ? currentRooms[targetRoomIndex].units
+          : [
+              {
+                id: `${cleanSlug}-101`,
+                roomNumber: '101',
+                floor: '1st Floor',
+                status: (status as any) || 'available',
+              },
+            ]);
 
     const roomPayload: RoomCategoryData = {
-      id: id || slug || `room_${Date.now()}`,
-      slug: slug || id || 'standard',
-      name: name || 'Standard Room',
+      id: cleanId,
+      slug: cleanSlug,
+      name: trimmedName || 'Standard Room',
       category: body.category || 'Standard',
       price: Number(price) || 36000,
+      status: status || 'available',
       maxGuests: Number(maxGuests) || 2,
       bedType: bedType || 'Queen Bed',
       roomSize: roomSize || '25 sqm',
-      image: photos[0],
-      images: photos,
+      image: photos[0] || '/images/standard-room.jpg',
+      images: photos.length > 0 ? photos : ['/images/standard-room.jpg'],
       description: description || '',
-      facilities: Array.isArray(facilities) ? facilities : [],
+      facilities: Array.isArray(facilities) && facilities.length > 0 ? facilities : ['Air Conditioning', 'Flat Screen TV', 'Wi-Fi', 'Hot Water'],
       isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : true,
-      units: Array.isArray(units) ? units : (targetRoomIndex >= 0 ? currentRooms[targetRoomIndex].units : []),
+      units: roomUnits,
     };
 
     let updatedRooms: RoomCategoryData[];
@@ -140,8 +240,10 @@ export async function POST(request: Request) {
     if (supabase) {
       try {
         const updateData: any = {
+          slug: roomPayload.slug,
           name: roomPayload.name,
           price_per_night: roomPayload.price,
+          status: roomPayload.status || 'available',
           max_guests: roomPayload.maxGuests,
           bed_type: roomPayload.bedType,
           room_size: roomPayload.roomSize,
@@ -155,11 +257,8 @@ export async function POST(request: Request) {
           updateData.is_featured = Boolean(isFeatured);
         }
 
-        if (slug) {
-          await supabase.from('rooms').update(updateData).eq('slug', slug);
-        } else if (id) {
-          await supabase.from('rooms').update(updateData).eq('id', id);
-        }
+        // Upsert into Supabase so new rooms are inserted and existing rooms are updated
+        await supabase.from('rooms').upsert(updateData, { onConflict: 'slug' });
       } catch (err) {
         console.warn('Supabase room update notice:', err);
       }
@@ -200,6 +299,29 @@ export async function DELETE(request: Request) {
     }
 
     const room = currentRooms[roomIndex];
+
+    // If neither photoUrl nor photoIndex is provided, delete the entire room category
+    if (!photoUrl && (photoIndex === null || photoIndex === undefined)) {
+      const updatedRooms = currentRooms.filter((r) => r.id !== roomId && r.slug !== roomId);
+      saveRooms(updatedRooms);
+
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          await supabase.from('rooms').delete().eq('slug', room.slug);
+        } catch (err) {
+          console.warn('Supabase delete room notice:', err);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${room.name} deleted successfully`,
+        rooms: updatedRooms,
+      });
+    }
+
+    // Otherwise, delete a specific photo from the room
     let updatedImages = [...(room.images || [room.image])];
 
     if (photoUrl) {

@@ -29,6 +29,7 @@ export default function RoomsPage() {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
           setRooms(live);
+          saveStoredRoomsData(live);
         }
       })
       .catch(() => {});
@@ -40,8 +41,8 @@ export default function RoomsPage() {
     return () => window.removeEventListener('super_e_rooms_updated', handleUpdate);
   }, []);
 
-  const categories = [
-    { slug: 'all', name: 'All Rooms (8)' },
+  const standardCategories = [
+    { slug: 'all', name: `All Rooms (${rooms.length})` },
     { slug: 'standard', name: 'Standard' },
     { slug: 'deluxe', name: 'Deluxe Series' },
     { slug: 'luxury', name: 'Luxury' },
@@ -49,11 +50,27 @@ export default function RoomsPage() {
     { slug: 'presidential', name: 'Presidential' },
   ];
 
+  const customCats = Array.from(new Set(rooms.map((r) => r.category || 'Standard'))).filter(
+    (c) => !['standard', 'deluxe', 'luxury', 'executive', 'presidential'].some(
+      (sc) => c.toLowerCase().includes(sc)
+    )
+  ).map((c) => ({
+    slug: c.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    name: c,
+  }));
+
+  const categories = [...standardCategories, ...customCats];
+
   const filteredRooms = rooms.filter((r) => {
     if (activeCategory === 'all') return true;
-    if (activeCategory === 'deluxe') return r.slug.startsWith('deluxe');
-    if (activeCategory === 'executive') return r.slug.startsWith('executive');
-    return r.category.toLowerCase().includes(activeCategory);
+    if (activeCategory === 'deluxe') return r.slug.startsWith('deluxe') || r.category.toLowerCase().includes('deluxe');
+    if (activeCategory === 'executive') return r.slug.startsWith('executive') || r.category.toLowerCase().includes('executive');
+    if (activeCategory === 'presidential') return r.slug.includes('presidential') || r.category.toLowerCase().includes('presidential');
+    return (
+      r.category.toLowerCase() === activeCategory ||
+      r.category.toLowerCase().includes(activeCategory) ||
+      r.slug.toLowerCase().includes(activeCategory)
+    );
   });
 
   return (

@@ -84,7 +84,7 @@ function BookPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load active rooms from local inventory
+  // Load active rooms from local inventory and live server API
   useEffect(() => {
     try {
       const stored = getStoredRoomsData();
@@ -94,6 +94,23 @@ function BookPageContent() {
     } catch {
       setRooms(INITIAL_ROOMS_DATA);
     }
+
+    fetch('/api/rooms')
+      .then((res) => res.json())
+      .then((data) => {
+        const live = Array.isArray(data) ? data : (data.rooms || []);
+        if (live.length > 0) {
+          setRooms(live);
+          saveStoredRoomsData(live);
+        }
+      })
+      .catch(() => {});
+
+    const handleUpdate = () => {
+      setRooms(getStoredRoomsData());
+    };
+    window.addEventListener('super_e_rooms_updated', handleUpdate);
+    return () => window.removeEventListener('super_e_rooms_updated', handleUpdate);
   }, []);
 
   // Generate booking reference once

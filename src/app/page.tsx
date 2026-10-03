@@ -9,6 +9,7 @@ import {
 import { generateWhatsAppURL, generatePhoneURL, formatPrice } from '@/lib/utils';
 import { HomeRoomShowcase } from '@/components/home/HomeRoomShowcase';
 import { getServerRoomsData } from '@/lib/server-rooms';
+import { HeroSlideshow } from '@/components/home/HeroSlideshow';
 
 // Icon mapping for facilities
 const facilityIcons: Record<string, React.ReactNode> = {
@@ -80,14 +81,7 @@ export default function HomePage() {
           HERO SECTION
           ═══════════════════════════════════════════ */}
       <section className="hero">
-        <Image
-          src="/images/hotel-exterior.jpg"
-          alt="Super E Luxury Hotel & Suites aerial drone view"
-          fill
-          style={{ objectFit: 'cover' }}
-          priority
-          quality={85}
-        />
+        <HeroSlideshow />
         <div className="hero-overlay" />
         <div className="hero-content animate-fade-in-up">
           <p className="section-label" style={{ color: 'var(--color-accent-light)' }}>
@@ -142,12 +136,79 @@ export default function HomePage() {
       <section className="section-padding" style={{ background: 'var(--color-surface)' }}>
         <div className="section-container">
           <div className="section-header">
-            <p className="section-label">Hotel Amenities</p>
-            <h2 className="section-title">Our Facilities</h2>
+            <p className="section-label">Verified On-Site Infrastructure</p>
+            <h2 className="section-title">Our Facilities &amp; Amenities</h2>
             <div className="divider" />
             <p className="section-description">
-              Everything you need for a comfortable and enjoyable stay.
+              Real on-site facilities designed for premier guest comfort, security, and dining in Keffi.
             </p>
+          </div>
+
+          {/* Featured Visual Facilities Cards (Google Image SEO optimized) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 'var(--space-xl)',
+              marginBottom: 'var(--space-2xl)',
+            }}
+          >
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ position: 'relative', height: '190px', width: '100%' }}>
+                <Image
+                  src="/images/super-e-hotel-front-desk-reception-cashier-keffi.jpg"
+                  alt="Super E Luxury Hotel 24/7 Front Desk Reception and Cashier in Keffi"
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                />
+              </div>
+              <div style={{ padding: 'var(--space-lg)' }}>
+                <span className="badge badge-accent" style={{ marginBottom: '0.4rem', fontSize: '0.7rem' }}>Guest Services</span>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.4rem' }}>24/7 Front Desk &amp; Cashier</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  Computerized check-in, cashless POS cashier terminals, transparent rate boards, and 24/7 concierge assistance.
+                </p>
+              </div>
+            </div>
+
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ position: 'relative', height: '190px', width: '100%' }}>
+                <Image
+                  src="/images/super-e-hotel-commercial-kitchen-restaurant-food-prep-keffi.jpg"
+                  alt="Super E Luxury Hotel Commercial Restaurant Kitchen and Food Prep in Keffi"
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                />
+              </div>
+              <div style={{ padding: 'var(--space-lg)' }}>
+                <span className="badge badge-accent" style={{ marginBottom: '0.4rem', fontSize: '0.7rem' }}>Dining &amp; Culinary</span>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.4rem' }}>Gourmet Commercial Kitchen</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  Hygienic stainless-steel culinary prep stations preparing fresh Nigerian favorites and hot room service dining.
+                </p>
+              </div>
+            </div>
+
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ position: 'relative', height: '190px', width: '100%' }}>
+                <Image
+                  src="/images/super-e-hotel-secure-car-parking-lot-compound-keffi.jpg"
+                  alt="Super E Luxury Hotel Secure Shaded Car Parking Lot in Keffi"
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                />
+              </div>
+              <div style={{ padding: 'var(--space-lg)' }}>
+                <span className="badge badge-accent" style={{ marginBottom: '0.4rem', fontSize: '0.7rem' }}>Guarded Security</span>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.4rem' }}>Secure Shaded Car Park</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  Heavy-duty steel sunshade canopies, gated perimeter wall, CCTV monitoring, and 24/7 security personnel.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div style={{
@@ -189,7 +250,7 @@ export default function HomePage() {
 
           <div style={{ textAlign: 'center', marginTop: 'var(--space-2xl)' }}>
             <Link href="/facilities" className="btn btn-outline">
-              All Facilities <ArrowRight size={18} />
+              Explore All Facilities &amp; Gallery <ArrowRight size={18} />
             </Link>
           </div>
         </div>

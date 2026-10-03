@@ -8,7 +8,8 @@ import {
   Bed, ArrowLeft, Plus, Edit2, Trash2, Save, X,
   Users, CheckCircle2, AlertCircle, Search, RefreshCw,
   SlidersHorizontal, Check, PlusCircle, UploadCloud, Camera,
-  Image as ImageIcon, ChevronLeft, ChevronRight, Star, Loader2
+  Image as ImageIcon, ChevronLeft, ChevronRight, Star, Loader2,
+  Wrench, UserCheck, ShieldAlert, Sparkles
 } from 'lucide-react';
 import {
   RoomCategoryData, RoomUnit,
@@ -17,11 +18,13 @@ import {
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
-const STATUS_CONFIG = {
-  available: { label: 'Available', bg: '#DCFCE7', text: '#166534', border: '#BBF7D0' },
-  occupied: { label: 'Occupied', bg: '#EDE9FE', text: '#5B21B6', border: '#DDD6FE' },
-  booked: { label: 'Booked', bg: '#DBEAFE', text: '#1E40AF', border: '#BFDBFE' },
-  maintenance: { label: 'Maintenance', bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
+type RoomStatus = 'available' | 'occupied' | 'booked' | 'maintenance';
+
+const STATUS_CONFIG: Record<RoomStatus, { label: string; dot: string; bg: string; text: string; border: string }> = {
+  available: { label: 'Available', dot: '🟢', bg: '#DCFCE7', text: '#166534', border: '#86EFAC' },
+  occupied: { label: 'Occupied', dot: '🟣', bg: '#EDE9FE', text: '#5B21B6', border: '#C4B5FD' },
+  maintenance: { label: 'In Maintenance', dot: '🟡', bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
+  booked: { label: 'Booked', dot: '🔵', bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
 };
 
 export default function AdminRoomsPage() {
@@ -29,28 +32,221 @@ export default function AdminRoomsPage() {
   const [rooms, setRooms] = useState<RoomCategoryData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [editingRoom, setEditingRoom] = useState<RoomCategoryData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [saveToast, setSaveToast] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
   const [newUnitNumber, setNewUnitNumber] = useState<{ [roomId: string]: string }>({});
+  const [newUnitFloor, setNewUnitFloor] = useState<{ [roomId: string]: string }>({});
+  const [newUnitStatus, setNewUnitStatus] = useState<{ [roomId: string]: RoomStatus }>({});
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [newCustomImageUrl, setNewCustomImageUrl] = useState('');
+
+  const triggerSaveNotification = (msg: string = 'Changes saved successfully!') => {
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(null), 2800);
+  };
 
   // Helper to persist room updates immediately to React state, localStorage and server API
   const persistRoomChange = async (updatedRoom: RoomCategoryData) => {
     setEditingRoom(updatedRoom);
-    const updatedRooms = rooms.map((r) => (r.id === updatedRoom.id ? updatedRoom : r));
+    const exists = rooms.some((r) => r.id === updatedRoom.id || r.slug === updatedRoom.slug);
+    const updatedRooms = exists
+      ? rooms.map((r) => (r.id === updatedRoom.id || r.slug === updatedRoom.slug ? updatedRoom : r))
+      : [...rooms, updatedRoom];
     setRooms(updatedRooms);
     saveStoredRoomsData(updatedRooms);
+
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRoom),
+      });
+      const data = await res.json();
+      if (data.success && data.rooms) {
+        setRooms(data.rooms);
+        saveStoredRoomsData(data.rooms);
+        if (data.room) {
+          setEditingRoom(data.room);
+        }
+      }
+    } catch (err) {
+      console.warn('Server room sync warning:', err);
+    }
+  };
+
+  // Directly update a specific room unit's status (Available, Occupied, Maintenance, Booked)
+  const handleUpdateUnitStatus = async (roomId: string, unitId: string, status: RoomStatus) => {
+    let unitRoomNum = '';
+    const updated = rooms.map((r) => {
+      if (r.id !== roomId && r.slug !== roomId) return r;
+      const updatedUnits = r.units.map((u) => {
+        if (u.id !== unitId) return u;
+        unitRoomNum = u.roomNumber;
+        return { ...u, status };
+      });
+      return { ...r, units: updatedUnits };
+    });
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+    triggerSaveNotification(`Room ${unitRoomNum || unitId} marked as ${STATUS_CONFIG[status].label}`);
 
     try {
       await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedRoom),
+        body: JSON.stringify({
+          action: 'update_unit_status',
+          roomId,
+          unitId,
+          status,
+        }),
       });
     } catch (err) {
-      console.warn('Server room sync warning:', err);
+      console.warn('Server update unit status warning:', err);
+    }
+  };
+
+  // Cycle room unit status on click
+  const handleCycleUnitStatus = (roomId: string, unitId: string) => {
+    const statuses: RoomStatus[] = ['available', 'occupied', 'maintenance', 'booked'];
+    const currentRoom = rooms.find((r) => r.id === roomId || r.slug === roomId);
+    const currentUnit = currentRoom?.units.find((u) => u.id === unitId);
+    if (!currentUnit) return;
+
+    const nextIdx = (statuses.indexOf(currentUnit.status as RoomStatus) + 1) % statuses.length;
+    handleUpdateUnitStatus(roomId, unitId, statuses[nextIdx]);
+  };
+
+  // Batch mark all units in a room tier (e.g. Mark All Available, Mark All In Maintenance)
+  const handleBatchMarkAll = async (roomId: string, status: RoomStatus) => {
+    const targetRoom = rooms.find((r) => r.id === roomId || r.slug === roomId);
+    if (!targetRoom) return;
+
+    const updated = rooms.map((r) => {
+      if (r.id !== roomId && r.slug !== roomId) return r;
+      const updatedUnits = r.units.map((u) => ({ ...u, status }));
+      return { ...r, status, units: updatedUnits };
+    });
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+    triggerSaveNotification(`All ${targetRoom.name} units marked as ${STATUS_CONFIG[status].label}`);
+
+    try {
+      await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_all_units',
+          roomId,
+          status,
+        }),
+      });
+    } catch (err) {
+      console.warn('Server batch mark warning:', err);
+    }
+  };
+
+  // Change tier overall status
+  const handleCategoryStatusChange = async (roomId: string, status: RoomStatus) => {
+    const targetRoom = rooms.find((r) => r.id === roomId || r.slug === roomId);
+    if (!targetRoom) return;
+
+    const updated = rooms.map((r) => {
+      if (r.id !== roomId && r.slug !== roomId) return r;
+      return { ...r, status };
+    });
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+    triggerSaveNotification(`${targetRoom.name} tier status set to ${STATUS_CONFIG[status].label}`);
+
+    try {
+      await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_tier_status',
+          roomId,
+          status,
+        }),
+      });
+    } catch (err) {
+      console.warn('Server tier status warning:', err);
+    }
+  };
+
+  // Add a new room unit
+  const handleAddUnit = async (roomId: string) => {
+    const num = (newUnitNumber[roomId] || '').trim();
+    if (!num) return;
+
+    const floor = (newUnitFloor[roomId] || '1st Floor').trim();
+    const status: RoomStatus = newUnitStatus[roomId] || 'available';
+
+    let addedUnit: RoomUnit | null = null;
+    let targetRoomPayload: RoomCategoryData | null = null;
+
+    const updated = rooms.map((r) => {
+      if (r.id !== roomId && r.slug !== roomId) return r;
+      const newUnit: RoomUnit = {
+        id: `${r.id}-${num.replace(/\s+/g, '')}-${Date.now()}`,
+        roomNumber: num,
+        floor: floor,
+        status: status,
+      };
+      addedUnit = newUnit;
+      targetRoomPayload = { ...r, units: [...r.units, newUnit] };
+      return targetRoomPayload;
+    });
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+    setNewUnitNumber({ ...newUnitNumber, [roomId]: '' });
+    triggerSaveNotification(`Room ${num} added (${STATUS_CONFIG[status].label})`);
+
+    if (targetRoomPayload) {
+      try {
+        await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetRoomPayload),
+        });
+      } catch (err) {
+        console.warn('Server add unit sync warning:', err);
+      }
+    }
+  };
+
+  // Remove a room unit
+  const handleDeleteUnit = async (roomId: string, unitId: string) => {
+    if (!confirm('Remove this room unit from inventory?')) return;
+    let targetRoomPayload: RoomCategoryData | null = null;
+
+    const updated = rooms.map((r) => {
+      if (r.id !== roomId && r.slug !== roomId) return r;
+      const filteredUnits = r.units.filter((u) => u.id !== unitId);
+      targetRoomPayload = { ...r, units: filteredUnits };
+      return targetRoomPayload;
+    });
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+    triggerSaveNotification('Room unit removed from inventory');
+
+    if (targetRoomPayload) {
+      try {
+        await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetRoomPayload),
+        });
+      } catch (err) {
+        console.warn('Server delete unit sync warning:', err);
+      }
     }
   };
 
@@ -72,6 +268,10 @@ export default function AdminRoomsPage() {
 
         const res = await fetch('/api/upload', {
           method: 'POST',
+          headers: {
+            'X-Admin-Auth': 'true',
+          },
+          credentials: 'include',
           body: formData,
         });
 
@@ -87,17 +287,19 @@ export default function AdminRoomsPage() {
     }
 
     if (uploadedUrls.length > 0) {
-      const existing = editingRoom.images && editingRoom.images.length > 0
+      const rawImgs = editingRoom.images && editingRoom.images.length > 0
         ? [...editingRoom.images]
         : (editingRoom.image ? [editingRoom.image] : []);
-      const combined = [...existing, ...uploadedUrls];
+      // If only standard placeholder was present, replace it with the actual user photos
+      const filteredExisting = rawImgs.filter((img) => img !== '/images/standard-room.jpg');
+      const combined = filteredExisting.length > 0 ? [...filteredExisting, ...uploadedUrls] : [...uploadedUrls];
       const updatedRoom: RoomCategoryData = {
         ...editingRoom,
         image: combined[0],
         images: combined,
       };
       await persistRoomChange(updatedRoom);
-      triggerSaveNotification();
+      triggerSaveNotification(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} uploaded successfully!`);
     }
 
     setUploadStatus(null);
@@ -123,7 +325,7 @@ export default function AdminRoomsPage() {
       images: currentImgs,
     };
     await persistRoomChange(updatedRoom);
-    triggerSaveNotification();
+    triggerSaveNotification('Photo order updated');
   };
 
   // Set chosen image as primary cover photo
@@ -143,7 +345,7 @@ export default function AdminRoomsPage() {
       images: currentImgs,
     };
     await persistRoomChange(updatedRoom);
-    triggerSaveNotification();
+    triggerSaveNotification('Cover photo updated');
   };
 
   // Delete an image from gallery
@@ -166,10 +368,8 @@ export default function AdminRoomsPage() {
       images: filtered,
     };
 
-    // 1. Instantly update React state and localStorage so UI updates with 0 latency
     await persistRoomChange(updatedRoom);
 
-    // 2. Call DELETE endpoint to ensure persistent disk & Supabase deletion
     try {
       await fetch(
         `/api/rooms?roomId=${encodeURIComponent(updatedRoom.id)}&photoUrl=${encodeURIComponent(deletedPhotoUrl)}`,
@@ -179,7 +379,7 @@ export default function AdminRoomsPage() {
       console.warn('API DELETE photo notice:', err);
     }
 
-    triggerSaveNotification();
+    triggerSaveNotification('Photo deleted');
   };
 
   // Add custom URL image
@@ -187,29 +387,126 @@ export default function AdminRoomsPage() {
     const url = newCustomImageUrl.trim();
     if (!url || !editingRoom) return;
 
-    const currentImgs = editingRoom.images && editingRoom.images.length > 0
+    const rawImgs = editingRoom.images && editingRoom.images.length > 0
       ? [...editingRoom.images]
       : (editingRoom.image ? [editingRoom.image] : []);
 
-    const updated = [...currentImgs, url];
+    const filteredExisting = rawImgs.filter((img) => img !== '/images/standard-room.jpg');
+    const combined = filteredExisting.length > 0 ? [...filteredExisting, url] : [url];
+
     const updatedRoom: RoomCategoryData = {
       ...editingRoom,
-      image: updated[0],
-      images: updated,
+      image: combined[0],
+      images: combined,
     };
     await persistRoomChange(updatedRoom);
     setNewCustomImageUrl('');
-    triggerSaveNotification();
+    triggerSaveNotification('Photo added to gallery');
+  };
+
+  // Save room category details (price, name, etc.)
+  const handleSaveRoomDetails = async () => {
+    if (!editingRoom) return;
+
+    const trimmedName = (editingRoom.name || '').trim();
+    if (!trimmedName) {
+      alert('Please enter a room name / tier title.');
+      return;
+    }
+
+    const cleanSlug = editingRoom.slug && !editingRoom.slug.startsWith('new-tier-')
+      ? editingRoom.slug
+      : trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+    const cleanId = editingRoom.id && !editingRoom.id.startsWith('tier-')
+      ? editingRoom.id
+      : cleanSlug;
+
+    const currentImgs = editingRoom.images && editingRoom.images.length > 0
+      ? editingRoom.images.filter(Boolean)
+      : (editingRoom.image ? [editingRoom.image] : ['/images/standard-room.jpg']);
+
+    const defaultUnits = (editingRoom.units && editingRoom.units.length > 0)
+      ? editingRoom.units
+      : [
+          {
+            id: `${cleanSlug}-101`,
+            roomNumber: '101',
+            floor: '1st Floor',
+            status: (editingRoom.status as any) || 'available',
+          },
+        ];
+
+    const roomToSave: RoomCategoryData = {
+      ...editingRoom,
+      id: cleanId,
+      slug: cleanSlug,
+      name: trimmedName,
+      image: currentImgs[0] || '/images/standard-room.jpg',
+      images: currentImgs.length > 0 ? currentImgs : ['/images/standard-room.jpg'],
+      status: editingRoom.status || 'available',
+      units: defaultUnits,
+    };
+
+    const exists = rooms.some((r) => r.id === roomToSave.id || r.slug === roomToSave.slug || r.id === editingRoom.id);
+    let updated: RoomCategoryData[];
+
+    if (exists) {
+      updated = rooms.map((r) => (r.id === roomToSave.id || r.slug === roomToSave.slug || r.id === editingRoom.id ? roomToSave : r));
+    } else {
+      updated = [...rooms, roomToSave];
+    }
+
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(roomToSave),
+      });
+      const data = await res.json();
+      if (data.success && data.rooms) {
+        setRooms(data.rooms);
+        saveStoredRoomsData(data.rooms);
+      }
+    } catch (err) {
+      console.warn('Server room save notice:', err);
+    }
+
+    setIsModalOpen(false);
+    setEditingRoom(null);
+    triggerSaveNotification(`${roomToSave.name} saved successfully!`);
+  };
+
+  // Delete an entire room tier
+  const handleDeleteCategory = async (roomId: string) => {
+    if (!confirm('Are you sure you want to delete this room category and all its inventory?')) return;
+    const updated = rooms.filter((r) => r.id !== roomId && r.slug !== roomId);
+    setRooms(updated);
+    saveStoredRoomsData(updated);
+
+    try {
+      await fetch(`/api/rooms?roomId=${encodeURIComponent(roomId)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('API DELETE room category notice:', err);
+    }
+
+    triggerSaveNotification('Room category removed');
   };
 
   useEffect(() => {
-    // Check authentication
     if (typeof window !== 'undefined' && sessionStorage.getItem('admin_authenticated') !== 'true') {
       router.push('/admin/login');
       return;
     }
-    // Load local storage first
-    setRooms(getStoredRoomsData());
+
+    // Load validated local storage first
+    const initial = getStoredRoomsData();
+    setRooms(initial);
 
     // Fetch live from server API to guarantee cross-device sync
     fetch('/api/rooms')
@@ -224,143 +521,36 @@ export default function AdminRoomsPage() {
       .catch((err) => console.warn('Could not fetch server rooms:', err));
   }, [router]);
 
-  const triggerSaveNotification = () => {
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 2500);
-  };
-
-  // Cycle room unit status on click
-  const handleCycleUnitStatus = (roomId: string, unitId: string) => {
-    const statuses: Array<'available' | 'occupied' | 'booked' | 'maintenance'> = [
-      'available', 'occupied', 'booked', 'maintenance'
-    ];
-
-    const updated = rooms.map((r) => {
-      if (r.id !== roomId) return r;
-      const updatedUnits = r.units.map((u) => {
-        if (u.id !== unitId) return u;
-        const nextIdx = (statuses.indexOf(u.status) + 1) % statuses.length;
-        return { ...u, status: statuses[nextIdx] };
-      });
-      return { ...r, units: updatedUnits };
-    });
-
-    setRooms(updated);
-    saveStoredRoomsData(updated);
-    triggerSaveNotification();
-  };
-
-  // Add a new room unit (e.g. Room 105)
-  const handleAddUnit = (roomId: string) => {
-    const num = (newUnitNumber[roomId] || '').trim();
-    if (!num) return;
-
-    const updated = rooms.map((r) => {
-      if (r.id !== roomId) return r;
-      const newUnit: RoomUnit = {
-        id: `${roomId}-${Date.now()}`,
-        roomNumber: num,
-        floor: 'Hotel Floor',
-        status: 'available',
-      };
-      return { ...r, units: [...r.units, newUnit] };
-    });
-
-    setRooms(updated);
-    saveStoredRoomsData(updated);
-    setNewUnitNumber({ ...newUnitNumber, [roomId]: '' });
-    triggerSaveNotification();
-  };
-
-  // Remove a room unit
-  const handleDeleteUnit = (roomId: string, unitId: string) => {
-    if (!confirm('Remove this room unit?')) return;
-    const updated = rooms.map((r) => {
-      if (r.id !== roomId) return r;
-      return { ...r, units: r.units.filter((u) => u.id !== unitId) };
-    });
-    setRooms(updated);
-    saveStoredRoomsData(updated);
-    triggerSaveNotification();
-  };
-
-  // Save room category details (price, name, etc.)
-  const handleSaveRoomDetails = () => {
-    if (!editingRoom) return;
-    const currentImgs = editingRoom.images && editingRoom.images.length > 0
-      ? editingRoom.images
-      : (editingRoom.image ? [editingRoom.image] : ['/images/standard-room.jpg']);
-
-    const roomToSave: RoomCategoryData = {
-      ...editingRoom,
-      image: currentImgs[0],
-      images: currentImgs,
-    };
-
-    const exists = rooms.some((r) => r.id === roomToSave.id);
-    let updated: RoomCategoryData[];
-
-    if (exists) {
-      updated = rooms.map((r) => (r.id === roomToSave.id ? roomToSave : r));
-    } else {
-      updated = [...rooms, roomToSave];
-    }
-
-    setRooms(updated);
-    saveStoredRoomsData(updated);
-
-    // Sync directly to Supabase database in background
-    fetch('/api/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(roomToSave),
-    }).catch((err) => console.warn('Supabase room sync notice:', err));
-
-    setIsModalOpen(false);
-    setEditingRoom(null);
-    triggerSaveNotification();
-  };
-
-  // Delete an entire room tier
-  const handleDeleteCategory = async (roomId: string) => {
-    if (!confirm('Are you sure you want to delete this room category and all its inventory?')) return;
-    const updated = rooms.filter((r) => r.id !== roomId);
-    setRooms(updated);
-    saveStoredRoomsData(updated);
-
-    try {
-      await fetch(`/api/rooms?roomId=${encodeURIComponent(roomId)}`, {
-        method: 'DELETE',
-      });
-    } catch (err) {
-      console.warn('API DELETE room category notice:', err);
-    }
-
-    triggerSaveNotification();
-  };
+  // Global counts
+  const totalUnitsCount = rooms.reduce((acc, r) => acc + r.units.length, 0);
+  const availableUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'available').length, 0);
+  const occupiedUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'occupied').length, 0);
+  const maintenanceUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'maintenance').length, 0);
+  const bookedUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'booked').length, 0);
 
   // Filtered rooms
   const filteredRooms = rooms.filter((room) => {
     const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       room.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       room.units.some(u => u.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+    
     const matchesCategory = selectedCategory === 'all' || room.category.toLowerCase() === selectedCategory.toLowerCase();
-    return matchesSearch && matchesCategory;
+
+    const matchesStatus = selectedStatusFilter === 'all' || 
+      (room.status === selectedStatusFilter) ||
+      room.units.some(u => u.status === selectedStatusFilter);
+
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   const categories = ['all', ...Array.from(new Set(rooms.map((r) => r.category.toLowerCase())))];
-
-  // Global counts
-  const totalUnitsCount = rooms.reduce((acc, r) => acc + r.units.length, 0);
-  const availableUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'available').length, 0);
-  const occupiedUnitsCount = rooms.reduce((acc, r) => acc + r.units.filter(u => u.status === 'occupied').length, 0);
 
   return (
     <div className="admin-layout" style={{ maxWidth: '100vw', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' }}>
       {/* Mobile Top Navigation */}
       <AdminMobileNav
         title="Rooms & Inventory"
-        subtitle={`${rooms.length} Tiers • ${totalUnitsCount} Total Units`}
+        subtitle={`${rooms.length} Official Tiers • ${totalUnitsCount} Units`}
         backHref="/admin"
       />
 
@@ -384,11 +574,13 @@ export default function AdminRoomsPage() {
 
       <main className="admin-main" style={{ minWidth: 0, width: '100%', maxWidth: '100vw', overflowX: 'hidden', boxSizing: 'border-box' }}>
         {/* Header & Actions */}
-        <div className="admin-header" style={{ marginBottom: '0.85rem', width: '100%', boxSizing: 'border-box' }}>
+        <div className="admin-header" style={{ marginBottom: '1rem', width: '100%', boxSizing: 'border-box' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Room Categories &amp; Inventory</h1>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748B' }}>
-              Manage the 8 official room tiers, live pricing, and room units manually.
+            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#0F172A' }}>
+              Room Categories &amp; Room Units Management
+            </h1>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748B' }}>
+              Easily mark room units as <strong>Available</strong>, <strong>Occupied</strong>, <strong>In Maintenance</strong>, or <strong>Booked</strong> with real-time sync.
             </p>
           </div>
           <button
@@ -400,15 +592,23 @@ export default function AdminRoomsPage() {
                 slug: `new-tier-${Date.now()}`,
                 name: '',
                 category: 'Standard',
-                price: 40000,
+                price: 45000,
+                status: 'available',
                 maxGuests: 2,
                 bedType: 'King Bed',
                 roomSize: '30 sqm',
                 image: '/images/standard-room.jpg',
                 images: ['/images/standard-room.jpg'],
-                description: '',
-                facilities: ['Air Conditioning', 'Flat Screen TV', 'Wi-Fi', 'Hot Water'],
-                units: [],
+                description: 'Luxury accommodation designed for supreme comfort, peace, and relaxation with modern amenities.',
+                facilities: ['Air Conditioning', 'Flat Screen TV', 'High-Speed Wi-Fi', 'Hot Water', 'Ensuite Bathroom', 'Room Service'],
+                units: [
+                  {
+                    id: `unit-${Date.now()}-101`,
+                    roomNumber: '101',
+                    floor: '1st Floor',
+                    status: 'available',
+                  },
+                ],
               });
               setIsModalOpen(true);
             }}
@@ -417,28 +617,112 @@ export default function AdminRoomsPage() {
           </button>
         </div>
 
-        {/* Inventory Summary Stats (2x2 grid on mobile, no horizontal blowout) */}
-        <div className="admin-mobile-metrics-grid" style={{ marginBottom: '1rem', width: '100%', boxSizing: 'border-box' }}>
-          <div className="mobile-metric-card blue">
-            <div className="metric-val">{totalUnitsCount}</div>
-            <div className="metric-lbl">Total Units</div>
+        {/* Global Inventory Status Metrics Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '0.65rem',
+            marginBottom: '1.25rem',
+            width: '100%',
+          }}
+        >
+          {/* Total Units */}
+          <div
+            onClick={() => setSelectedStatusFilter('all')}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              backgroundColor: '#FFFFFF',
+              border: selectedStatusFilter === 'all' ? '2px solid #1E3A8A' : '1px solid #E2E8F0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0F172A' }}>{totalUnitsCount}</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Total Units</div>
           </div>
-          <div className="mobile-metric-card green">
-            <div className="metric-val">{availableUnitsCount}</div>
-            <div className="metric-lbl">Available Now</div>
+
+          {/* Available Units */}
+          <div
+            onClick={() => setSelectedStatusFilter('available')}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              backgroundColor: '#F0FDF4',
+              border: selectedStatusFilter === 'available' ? '2px solid #16A34A' : '1px solid #BBF7D0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🟢</span> {availableUnitsCount}
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#15803D' }}>Available</div>
           </div>
-          <div className="mobile-metric-card purple">
-            <div className="metric-val">{occupiedUnitsCount}</div>
-            <div className="metric-lbl">Occupied</div>
+
+          {/* Occupied Units */}
+          <div
+            onClick={() => setSelectedStatusFilter('occupied')}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              backgroundColor: '#FAF5FF',
+              border: selectedStatusFilter === 'occupied' ? '2px solid #9333EA' : '1px solid #DDD6FE',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#5B21B6', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🟣</span> {occupiedUnitsCount}
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6B21A8' }}>Occupied</div>
           </div>
-          <div className="mobile-metric-card amber">
-            <div className="metric-val">{rooms.length}</div>
-            <div className="metric-lbl">Room Tiers</div>
+
+          {/* In Maintenance Units */}
+          <div
+            onClick={() => setSelectedStatusFilter('maintenance')}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              backgroundColor: '#FFFBEB',
+              border: selectedStatusFilter === 'maintenance' ? '2px solid #D97706' : '1px solid #FDE68A',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400E', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🟡</span> {maintenanceUnitsCount}
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#B45309' }}>In Maintenance</div>
+          </div>
+
+          {/* Booked Units */}
+          <div
+            onClick={() => setSelectedStatusFilter('booked')}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              backgroundColor: '#EFF6FF',
+              border: selectedStatusFilter === 'booked' ? '2px solid #2563EB' : '1px solid #BFDBFE',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1E40AF', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>🔵</span> {bookedUnitsCount}
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1D4ED8' }}>Booked</div>
           </div>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+        {/* Quick Filter Tabs & Search */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.25rem' }}>
           <div style={{ position: 'relative' }}>
             <Search
               size={18}
@@ -446,7 +730,7 @@ export default function AdminRoomsPage() {
             />
             <input
               type="text"
-              placeholder="Search category, room number (e.g. 101, Deluxe)..."
+              placeholder="Search category, room number (e.g. 101, 204, Deluxe)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -460,42 +744,121 @@ export default function AdminRoomsPage() {
             />
           </div>
 
-          {/* Category Pill Filters */}
-          <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.25rem', scrollbarWidth: 'none' }}>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                style={{
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  border: selectedCategory === cat ? 'none' : '1px solid #CBD5E1',
-                  backgroundColor: selectedCategory === cat ? '#1E3A8A' : '#FFFFFF',
-                  color: selectedCategory === cat ? '#FFFFFF' : '#475569',
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                }}
-              >
-                {cat === 'all' ? 'All Tiers' : cat.toUpperCase()}
-              </button>
-            ))}
+          {/* Status Filter Buttons */}
+          <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.2rem', scrollbarWidth: 'none' }}>
+            <button
+              type="button"
+              onClick={() => setSelectedStatusFilter('all')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: selectedStatusFilter === 'all' ? '2px solid #0F172A' : '1px solid #CBD5E1',
+                backgroundColor: selectedStatusFilter === 'all' ? '#0F172A' : '#FFFFFF',
+                color: selectedStatusFilter === 'all' ? '#FFFFFF' : '#334155',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              All Statuses ({totalUnitsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatusFilter('available')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: selectedStatusFilter === 'available' ? '2px solid #16A34A' : '1px solid #BBF7D0',
+                backgroundColor: selectedStatusFilter === 'available' ? '#16A34A' : '#F0FDF4',
+                color: selectedStatusFilter === 'available' ? '#FFFFFF' : '#166534',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🟢 Available ({availableUnitsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatusFilter('occupied')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: selectedStatusFilter === 'occupied' ? '2px solid #9333EA' : '1px solid #DDD6FE',
+                backgroundColor: selectedStatusFilter === 'occupied' ? '#9333EA' : '#FAF5FF',
+                color: selectedStatusFilter === 'occupied' ? '#FFFFFF' : '#5B21B6',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🟣 Occupied ({occupiedUnitsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatusFilter('maintenance')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: selectedStatusFilter === 'maintenance' ? '2px solid #D97706' : '1px solid #FDE68A',
+                backgroundColor: selectedStatusFilter === 'maintenance' ? '#D97706' : '#FFFBEB',
+                color: selectedStatusFilter === 'maintenance' ? '#FFFFFF' : '#92400E',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🟡 In Maintenance ({maintenanceUnitsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatusFilter('booked')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                border: selectedStatusFilter === 'booked' ? '2px solid #2563EB' : '1px solid #BFDBFE',
+                backgroundColor: selectedStatusFilter === 'booked' ? '#2563EB' : '#EFF6FF',
+                color: selectedStatusFilter === 'booked' ? '#FFFFFF' : '#1E40AF',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🔵 Booked ({bookedUnitsCount})
+            </button>
           </div>
         </div>
 
-        {/* Room Cards List (Mobile Priority) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* Room Categories Cards List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {filteredRooms.map((room) => {
             const availableUnits = room.units.filter((u) => u.status === 'available').length;
             const occupiedUnits = room.units.filter((u) => u.status === 'occupied').length;
+            const maintenanceUnits = room.units.filter((u) => u.status === 'maintenance').length;
+            const bookedUnits = room.units.filter((u) => u.status === 'booked').length;
             const roomPhotoCount = (room.images && room.images.length > 0) ? room.images.length : 1;
+            const tierStatus: RoomStatus = (room.status as RoomStatus) || 'available';
+            const tierStatusCfg = STATUS_CONFIG[tierStatus] || STATUS_CONFIG.available;
 
             return (
-              <div key={room.id} className="room-admin-card">
-                {/* Top Row: Thumbnail + Category details */}
-                <div style={{ display: 'flex', gap: '0.85rem', padding: '0.85rem', borderBottom: '1px solid #F1F5F9' }}>
+              <div
+                key={room.id}
+                className="room-admin-card"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '14px',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Top Row: Thumbnail + Category details + Tier Status Selector */}
+                <div style={{ display: 'flex', gap: '1rem', padding: '1rem', borderBottom: '1px solid #F1F5F9', flexWrap: 'wrap' }}>
                   <div
                     onClick={() => {
                       const imgs = room.images && room.images.length > 0 ? room.images : [room.image];
@@ -503,8 +866,8 @@ export default function AdminRoomsPage() {
                       setIsModalOpen(true);
                     }}
                     style={{
-                      width: '84px',
-                      height: '84px',
+                      width: '90px',
+                      height: '90px',
                       borderRadius: '10px',
                       overflow: 'hidden',
                       position: 'relative',
@@ -519,7 +882,7 @@ export default function AdminRoomsPage() {
                       alt={room.name}
                       fill
                       style={{ objectFit: 'cover' }}
-                      sizes="84px"
+                      sizes="90px"
                     />
                     <span
                       style={{
@@ -543,26 +906,51 @@ export default function AdminRoomsPage() {
                     </span>
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div style={{ flex: 1, minWidth: '240px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div>
-                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>
-                          {room.name}
-                        </h3>
-                        <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
+                            {room.name}
+                          </h3>
+                          {/* Tier Status Dropdown */}
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <label style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B' }}>Tier Status:</label>
+                            <select
+                              value={tierStatus}
+                              onChange={(e) => handleCategoryStatusChange(room.id, e.target.value as RoomStatus)}
+                              style={{
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                backgroundColor: tierStatusCfg.bg,
+                                color: tierStatusCfg.text,
+                                border: `1.5px solid ${tierStatusCfg.border}`,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <option value="available">🟢 Available</option>
+                              <option value="occupied">🟣 Occupied</option>
+                              <option value="maintenance">🟡 In Maintenance</option>
+                              <option value="booked">🔵 Booked</option>
+                            </select>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 500, display: 'block', marginTop: '0.2rem' }}>
                           {room.bedType} • {room.roomSize} • Max {room.maxGuests} Guests
                         </span>
                       </div>
 
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1E3A8A' }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#1E3A8A' }}>
                           ₦{room.price.toLocaleString()}
                         </div>
-                        <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>/ night (incl. VAT)</span>
+                        <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>/ night (incl. 10% SC &amp; 7% VAT)</span>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
                       <button
                         onClick={() => {
                           const imgs = room.images && room.images.length > 0 ? room.images : [room.image];
@@ -571,25 +959,26 @@ export default function AdminRoomsPage() {
                         }}
                         className="btn btn-sm"
                         style={{
-                          padding: '0.25rem 0.55rem',
-                          fontSize: '0.72rem',
+                          padding: '0.28rem 0.65rem',
+                          fontSize: '0.75rem',
                           border: '1px solid #CBD5E1',
                           backgroundColor: '#F8FAFC',
                           color: '#334155',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '0.25rem',
+                          gap: '0.3rem',
+                          fontWeight: 600,
                         }}
                       >
-                        <Edit2 size={13} /> Edit Tier ({roomPhotoCount} 📷)
+                        <Edit2 size={13} /> Edit Tier &amp; Photos ({roomPhotoCount} 📷)
                       </button>
 
                       <button
                         onClick={() => handleDeleteCategory(room.id)}
                         className="btn btn-sm"
                         style={{
-                          padding: '0.25rem 0.55rem',
-                          fontSize: '0.72rem',
+                          padding: '0.28rem 0.6rem',
+                          fontSize: '0.75rem',
                           border: '1px solid #FECACA',
                           backgroundColor: '#FEF2F2',
                           color: '#DC2626',
@@ -598,24 +987,98 @@ export default function AdminRoomsPage() {
                           gap: '0.25rem',
                         }}
                       >
-                        <Trash2 size={13} /> Delete
+                        <Trash2 size={13} /> Delete Tier
                       </button>
                     </div>
                   </div>
                 </div>
 
+                {/* Quick Batch Actions Toolbar */}
+                <div
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: '0.5rem 1rem',
+                    borderBottom: '1px solid #F1F5F9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>
+                    <Sparkles size={13} color="#D97706" />
+                    <span>Quick Mark All {room.units.length} Units in {room.name}:</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchMarkAll(room.id, 'available')}
+                      style={{
+                        padding: '0.22rem 0.55rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: '1px solid #86EFAC',
+                        backgroundColor: '#DCFCE7',
+                        color: '#166534',
+                        cursor: 'pointer',
+                      }}
+                      title="Set all units in this room tier to Available"
+                    >
+                      🟢 Mark All Available
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchMarkAll(room.id, 'occupied')}
+                      style={{
+                        padding: '0.22rem 0.55rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: '1px solid #C4B5FD',
+                        backgroundColor: '#EDE9FE',
+                        color: '#5B21B6',
+                        cursor: 'pointer',
+                      }}
+                      title="Set all units in this room tier to Occupied"
+                    >
+                      🟣 Mark All Occupied
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchMarkAll(room.id, 'maintenance')}
+                      style={{
+                        padding: '0.22rem 0.55rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        border: '1px solid #FCD34D',
+                        backgroundColor: '#FEF3C7',
+                        color: '#92400E',
+                        cursor: 'pointer',
+                      }}
+                      title="Set all units in this room tier to Maintenance"
+                    >
+                      🟡 Mark In Maintenance
+                    </button>
+                  </div>
+                </div>
+
                 {/* Units Inventory Section */}
-                <div style={{ padding: '0.85rem', backgroundColor: '#FAFAFA' }}>
+                <div style={{ padding: '1rem', backgroundColor: '#FAFAFA' }}>
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: '0.5rem',
+                      marginBottom: '0.75rem',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E293B' }}>
                         Room Units ({room.units.length})
                       </span>
                       <span
@@ -623,8 +1086,8 @@ export default function AdminRoomsPage() {
                           fontSize: '0.68rem',
                           padding: '0.15rem 0.45rem',
                           borderRadius: '9999px',
-                          backgroundColor: availableUnits > 0 ? '#DCFCE7' : '#FEE2E2',
-                          color: availableUnits > 0 ? '#166534' : '#991B1B',
+                          backgroundColor: '#DCFCE7',
+                          color: '#166534',
                           fontWeight: 700,
                         }}
                       >
@@ -644,91 +1107,164 @@ export default function AdminRoomsPage() {
                           {occupiedUnits} Occupied
                         </span>
                       )}
+                      {maintenanceUnits > 0 && (
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '9999px',
+                            backgroundColor: '#FEF3C7',
+                            color: '#92400E',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {maintenanceUnits} In Maintenance
+                        </span>
+                      )}
+                      {bookedUnits > 0 && (
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '9999px',
+                            backgroundColor: '#DBEAFE',
+                            color: '#1E40AF',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {bookedUnits} Booked
+                        </span>
+                      )}
                     </div>
-                    <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
-                      Tap a unit to change status
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
+                      Change status below or click unit to cycle
                     </span>
                   </div>
 
-                  {/* Units Pills list */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.65rem' }}>
+                  {/* Units Interactive Cards Grid */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
+                      gap: '0.6rem',
+                      marginBottom: '1rem',
+                    }}
+                  >
                     {room.units.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic' }}>
-                        No room numbers added yet. Add one below!
-                      </p>
+                      <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px dashed #CBD5E1', gridColumn: '1 / -1' }}>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                          No room unit numbers added yet for this tier. Add one using the form below!
+                        </p>
+                      </div>
                     ) : (
                       room.units.map((unit) => {
-                        const cfg = STATUS_CONFIG[unit.status] || STATUS_CONFIG.available;
+                        const unitStatus: RoomStatus = (unit.status as RoomStatus) || 'available';
+                        const cfg = STATUS_CONFIG[unitStatus] || STATUS_CONFIG.available;
+
                         return (
                           <div
                             key={unit.id}
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              borderRadius: '9999px',
                               backgroundColor: cfg.bg,
-                              border: `1px solid ${cfg.border}`,
-                              color: cfg.text,
-                              overflow: 'hidden',
+                              border: `1.5px solid ${cfg.border}`,
+                              borderRadius: '10px',
+                              padding: '0.55rem 0.65rem',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.35rem',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                             }}
                           >
-                            <button
-                              type="button"
-                              onClick={() => handleCycleUnitStatus(room.id, unit.id)}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleCycleUnitStatus(room.id, unit.id)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  fontSize: '0.88rem',
+                                  fontWeight: 800,
+                                  color: '#0F172A',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                                title="Click to cycle status"
+                              >
+                                <span>Room {unit.roomNumber}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUnit(room.id, unit.id)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: '2px',
+                                  color: '#94A3B8',
+                                  cursor: 'pointer',
+                                  borderRadius: '4px',
+                                }}
+                                title="Remove room unit"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+
+                            {/* Direct Status Selector Dropdown */}
+                            <select
+                              value={unitStatus}
+                              onChange={(e) => handleUpdateUnitStatus(room.id, unit.id, e.target.value as RoomStatus)}
                               style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: '0.3rem 0.55rem',
+                                width: '100%',
+                                padding: '0.32rem 0.45rem',
+                                borderRadius: '6px',
                                 fontSize: '0.75rem',
                                 fontWeight: 700,
-                                color: 'inherit',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.3rem',
-                              }}
-                              title="Click to cycle status: Available -> Occupied -> Booked -> Maintenance"
-                            >
-                              <span>Room {unit.roomNumber}</span>
-                              <span
-                                style={{
-                                  fontSize: '0.65rem',
-                                  textTransform: 'uppercase',
-                                  opacity: 0.85,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                ({cfg.label})
-                              </span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUnit(room.id, unit.id)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                borderLeft: `1px solid ${cfg.border}`,
-                                padding: '0.3rem 0.45rem',
+                                border: `1px solid ${cfg.border}`,
+                                backgroundColor: '#FFFFFF',
                                 color: cfg.text,
                                 cursor: 'pointer',
-                                opacity: 0.6,
                               }}
-                              title="Remove unit"
                             >
-                              <X size={12} />
-                            </button>
+                              <option value="available">🟢 Available</option>
+                              <option value="occupied">🟣 Occupied</option>
+                              <option value="maintenance">🟡 In Maintenance</option>
+                              <option value="booked">🔵 Booked</option>
+                            </select>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: '#64748B' }}>
+                              <span>{unit.floor || 'Hotel Floor'}</span>
+                              <span style={{ fontWeight: 700, color: cfg.text, textTransform: 'uppercase' }}>
+                                {cfg.label}
+                              </span>
+                            </div>
                           </div>
                         );
                       })
                     )}
                   </div>
 
-                  {/* Add Unit Input Form */}
-                  <div style={{ display: 'flex', gap: '0.4rem', maxWidth: '320px' }}>
+                  {/* Add Unit Form Row */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '0.45rem',
+                      maxWidth: '560px',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      backgroundColor: '#FFFFFF',
+                      padding: '0.6rem',
+                      borderRadius: '8px',
+                      border: '1px solid #E2E8F0',
+                    }}
+                  >
                     <input
                       type="text"
-                      placeholder="Add Room Number (e.g. 105)"
+                      placeholder="Room No. (e.g. 105)"
                       value={newUnitNumber[room.id] || ''}
                       onChange={(e) => setNewUnitNumber({ ...newUnitNumber, [room.id]: e.target.value })}
                       onKeyDown={(e) => {
@@ -738,21 +1274,59 @@ export default function AdminRoomsPage() {
                         }
                       }}
                       style={{
-                        flex: 1,
-                        padding: '0.35rem 0.65rem',
+                        flex: '1 1 120px',
+                        padding: '0.4rem 0.6rem',
                         fontSize: '0.78rem',
                         borderRadius: '6px',
                         border: '1px solid #CBD5E1',
                         backgroundColor: '#FFFFFF',
                       }}
                     />
+
+                    <select
+                      value={newUnitFloor[room.id] || '1st Floor'}
+                      onChange={(e) => setNewUnitFloor({ ...newUnitFloor, [room.id]: e.target.value })}
+                      style={{
+                        padding: '0.4rem 0.5rem',
+                        fontSize: '0.78rem',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#334155',
+                      }}
+                    >
+                      <option value="1st Floor">1st Floor</option>
+                      <option value="2nd Floor">2nd Floor</option>
+                      <option value="3rd Floor">3rd Floor</option>
+                      <option value="4th Floor">4th Floor</option>
+                      <option value="Penthouse">Penthouse</option>
+                    </select>
+
+                    <select
+                      value={newUnitStatus[room.id] || 'available'}
+                      onChange={(e) => setNewUnitStatus({ ...newUnitStatus, [room.id]: e.target.value as RoomStatus })}
+                      style={{
+                        padding: '0.4rem 0.5rem',
+                        fontSize: '0.78rem',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#334155',
+                      }}
+                    >
+                      <option value="available">🟢 Available</option>
+                      <option value="occupied">🟣 Occupied</option>
+                      <option value="maintenance">🟡 Maintenance</option>
+                      <option value="booked">🔵 Booked</option>
+                    </select>
+
                     <button
                       type="button"
                       onClick={() => handleAddUnit(room.id)}
                       className="btn btn-sm btn-primary"
-                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
                     >
-                      <Plus size={14} /> Add
+                      <Plus size={14} /> Add Unit
                     </button>
                   </div>
                 </div>
@@ -771,7 +1345,7 @@ export default function AdminRoomsPage() {
               backdropFilter: 'blur(4px)',
               zIndex: 1000,
               display: 'flex',
-              alignItems: 'flex-end', // bottom-sheet on mobile
+              alignItems: 'flex-end',
               justifyContent: 'center',
             }}
             onClick={() => setIsModalOpen(false)}
@@ -792,7 +1366,7 @@ export default function AdminRoomsPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>
                   {editingRoom.name ? `Edit ${editingRoom.name}` : 'Create Room Category'}
                 </h3>
                 <button
@@ -832,14 +1406,18 @@ export default function AdminRoomsPage() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>
-                      Max Guests
+                      Tier Status
                     </label>
-                    <input
-                      type="number"
-                      value={editingRoom.maxGuests}
-                      onChange={(e) => setEditingRoom({ ...editingRoom, maxGuests: Number(e.target.value) })}
+                    <select
+                      value={editingRoom.status || 'available'}
+                      onChange={(e) => setEditingRoom({ ...editingRoom, status: e.target.value as RoomStatus })}
                       style={{ width: '100%', padding: '0.6rem', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.875rem' }}
-                    />
+                    >
+                      <option value="available">🟢 Available (Open for bookings)</option>
+                      <option value="occupied">🟣 Occupied (Fully occupied)</option>
+                      <option value="maintenance">🟡 In Maintenance (Offline)</option>
+                      <option value="booked">🔵 Booked (Reserved)</option>
+                    </select>
                   </div>
                 </div>
 
@@ -871,6 +1449,35 @@ export default function AdminRoomsPage() {
                   </div>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>
+                      Category
+                    </label>
+                    <input
+                      type="text"
+                      value={editingRoom.category}
+                      onChange={(e) => setEditingRoom({ ...editingRoom, category: e.target.value })}
+                      placeholder="e.g. Standard, Deluxe, Executive, Suite"
+                      style={{ width: '100%', padding: '0.6rem', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.875rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>
+                      Max Guests
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={editingRoom.maxGuests || 2}
+                      onChange={(e) => setEditingRoom({ ...editingRoom, maxGuests: Number(e.target.value) || 2 })}
+                      style={{ width: '100%', padding: '0.6rem', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.875rem' }}
+                    />
+                  </div>
+                </div>
+
                 {/* Multi-Photo & Gallery Management Section */}
                 {(() => {
                   const roomImages = (editingRoom.images && editingRoom.images.length > 0)
@@ -890,7 +1497,7 @@ export default function AdminRoomsPage() {
 
                       {/* Dual Upload from Mobile Phone */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                        {/* Multi-Photo Picker (Camera Roll / Gallery) */}
+                        {/* Multi-Photo Picker */}
                         <label
                           style={{
                             backgroundColor: '#1E3A8A',
@@ -911,7 +1518,7 @@ export default function AdminRoomsPage() {
                         >
                           <UploadCloud size={18} />
                           <span>{uploadStatus ? 'Uploading...' : '📁 Multi-Photo'}</span>
-                          <span style={{ fontSize: '0.65rem', opacity: 0.85 }}>Select Multiple from Phone</span>
+                          <span style={{ fontSize: '0.65rem', opacity: 0.85 }}>Select from Gallery</span>
                           <input
                             type="file"
                             multiple
@@ -1203,19 +1810,19 @@ export default function AdminRoomsPage() {
               transform: 'translateX(-50%)',
               backgroundColor: '#1E293B',
               color: '#FFFFFF',
-              padding: '0.6rem 1.2rem',
+              padding: '0.65rem 1.4rem',
               borderRadius: '9999px',
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
               fontSize: '0.85rem',
-              fontWeight: 600,
-              boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+              fontWeight: 700,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
               zIndex: 1100,
             }}
           >
             <CheckCircle2 size={16} style={{ color: '#4ADE80' }} />
-            <span>Inventory changes saved!</span>
+            <span>{saveToast}</span>
           </div>
         )}
       </main>

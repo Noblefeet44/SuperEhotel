@@ -140,6 +140,7 @@ export interface RoomCategoryData {
   description: string;
   facilities: string[];
   isFeatured?: boolean;
+  status?: 'available' | 'occupied' | 'booked' | 'maintenance';
   units: RoomUnit[];
 }
 
@@ -336,7 +337,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
   },
 ];
 
-const STORAGE_KEY = 'super_e_rooms_inventory_v3';
+const STORAGE_KEY = 'super_e_rooms_inventory_v4';
 
 export function getStoredRoomsData(): RoomCategoryData[] {
   if (typeof window === 'undefined') {
@@ -349,19 +350,49 @@ export function getStoredRoomsData(): RoomCategoryData[] {
       return INITIAL_ROOMS_DATA;
     }
     const parsed: RoomCategoryData[] = JSON.parse(saved);
-    // Ensure every room category has a populated images array
-    const enriched = parsed.map((r) => {
-      const fallback = INITIAL_ROOMS_DATA.find((init) => init.id === r.id);
-      const images = r.images && r.images.length > 0
-        ? r.images
-        : (fallback?.images && fallback.images.length > 0 ? fallback.images : [r.image]);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ROOMS_DATA));
+      return INITIAL_ROOMS_DATA;
+    }
+
+    // Merge with INITIAL_ROOMS_DATA to ensure all 8 tiers, official prices, and valid units are present
+    const enriched: RoomCategoryData[] = INITIAL_ROOMS_DATA.map((defaultRoom) => {
+      const match = parsed.find(
+        (p) => p.id === defaultRoom.id || p.slug === defaultRoom.slug || `${p.slug}-room` === defaultRoom.slug
+      );
+      if (!match) return defaultRoom;
+
+      // Ensure units are not lost or empty
+      const units = (Array.isArray(match.units) && match.units.length > 0)
+        ? match.units
+        : defaultRoom.units;
+
+      const images = (Array.isArray(match.images) && match.images.length > 0)
+        ? match.images
+        : (defaultRoom.images || [match.image || defaultRoom.image]);
+
+      // Enforce official rate if stored rate is from old outdated seed (< 36000 for standard, < 47000 for deluxe, etc.)
+      const price = (match.price && match.price >= defaultRoom.price * 0.7)
+        ? match.price
+        : defaultRoom.price;
+
       return {
-        ...r,
+        ...defaultRoom,
+        ...match,
+        price,
+        status: match.status || defaultRoom.status || 'available',
         images,
-        image: images[0] || r.image,
+        image: images[0] || match.image || defaultRoom.image,
+        units,
       };
     });
-    return enriched;
+
+    // Also include any user-created custom tiers not in default 8
+    const customTiers = parsed.filter(
+      (p) => !INITIAL_ROOMS_DATA.some((d) => d.id === p.id || d.slug === p.slug)
+    );
+
+    return [...enriched, ...customTiers];
   } catch (e) {
     console.error('Error reading rooms from storage:', e);
     return INITIAL_ROOMS_DATA;
