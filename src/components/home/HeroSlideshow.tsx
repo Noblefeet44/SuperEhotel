@@ -33,8 +33,8 @@ const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-const SLIDE_DURATION_MS = 2000; // 2 seconds per slide
-const TRANSITION_DURATION_MS = 600; // 600ms smooth crossfade
+const SLIDE_DURATION_MS = 15000; // 15 seconds per slide
+const TRANSITION_DURATION_MS = 1200; // 1.2s smooth crossfade
 
 export function HeroSlideshow() {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -76,9 +76,16 @@ export function HeroSlideshow() {
         zIndex: 0,
       }}
     >
-      {/* Slides Stack with Crossfade & Ken Burns Zoom */}
+      {/* Slides Stack with Crossfade & Cinematic Ken Burns Zoom Effect */}
       {HERO_SLIDES.map((slide, idx) => {
         const isActive = idx === currentIndex;
+        const isEven = idx % 2 === 0;
+        const zoomAnim = isActive
+          ? isEven
+            ? `kenBurnsZoomIn ${SLIDE_DURATION_MS}ms cubic-bezier(0.25, 1, 0.5, 1) forwards`
+            : `kenBurnsZoomOut ${SLIDE_DURATION_MS}ms cubic-bezier(0.25, 1, 0.5, 1) forwards`
+          : 'none';
+
         return (
           <div
             key={slide.url}
@@ -92,12 +99,12 @@ export function HeroSlideshow() {
             }}
           >
             <div
+              key={`zoom-${slide.url}-${isActive}`}
               style={{
                 position: 'relative',
                 width: '100%',
                 height: '100%',
-                transform: isActive ? 'scale(1.04)' : 'scale(1.0)',
-                transition: isActive ? `transform ${SLIDE_DURATION_MS}ms ease-out` : 'none',
+                animation: zoomAnim,
                 willChange: 'transform, opacity',
               }}
             >
@@ -261,6 +268,24 @@ export function HeroSlideshow() {
           }
           100% {
             width: 100%;
+          }
+        }
+
+        @keyframes kenBurnsZoomIn {
+          0% {
+            transform: scale(1.0);
+          }
+          100% {
+            transform: scale(1.14);
+          }
+        }
+
+        @keyframes kenBurnsZoomOut {
+          0% {
+            transform: scale(1.14);
+          }
+          100% {
+            transform: scale(1.01);
           }
         }
       `}</style>
