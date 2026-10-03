@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { createClient } from '@supabase/supabase-js';
-import { verifyAdminRequest } from '@/lib/auth';
 
 export interface StoredBooking {
   id: string;
@@ -39,6 +39,7 @@ export interface StoredBooking {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'bookings.json');
+const TMP_FILE = path.join(os.tmpdir(), 'super-e-bookings.json');
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -48,33 +49,196 @@ function getSupabase() {
 }
 
 function ensureDataFile(): StoredBooking[] {
+  // 1. Try primary data file
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.warn('Notice reading data/bookings.json:', err);
+  }
+
+  // 2. Try tmp file fallback (persists across ephemeral writes)
+  try {
+    if (fs.existsSync(TMP_FILE)) {
+      const raw = fs.readFileSync(TMP_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+
+  // 3. Try to initialize
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    if (!fs.existsSync(DATA_FILE)) {
-      fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf8');
-      return [];
-    }
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading bookings file:', err);
-    return [];
-  }
+    fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf8');
+  } catch {}
+
+  return [];
 }
 
 function saveBookings(bookings: StoredBooking[]): boolean {
+  let saved = false;
+  // 1. Try saving to DATA_FILE
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(DATA_FILE, JSON.stringify(bookings, null, 2), 'utf8');
-    return true;
+    saved = true;
   } catch (err) {
-    console.error('Error saving bookings file:', err);
-    return false;
+    console.warn('Read-only primary filesystem (falling back to tmp):', err);
   }
+
+  // 2. Always backup to TMP_FILE
+  try {
+    fs.writeFileSync(TMP_FILE, JSON.stringify(bookings, null, 2), 'utf8');
+    saved = true;
+  } catch (tmpErr) {
+    console.warn('Tmp bookings write warning:', tmpErr);
+  }
+
+  return saved;
+}
+
+/**
+ * Saves guest payment receipt to Supabase Storage bucket ('receipts' / 'media'),
+ * local disk (/public/uploads/receipts/), and registers in the media table.
+ */
+async function saveReceiptToStorage(
+  ref: string,
+  receiptDataOrUrl: string,
+  originalFileName?: string
+): Promise<{ receiptUrl: string; fileName: string }> {
+  if (!receiptDataOrUrl) {
+    return { receiptUrl: '', fileName: '' };
+  }
+
+  // If already a remote public URL and not a data URI, keep it
+  if (receiptDataOrUrl.startsWith('http://') || receiptDataOrUrl.startsWith('https://')) {
+    return { receiptUrl: receiptDataOrUrl, fileName: originalFileName || 'receipt.jpg' };
+  }
+
+  // If already a local relative path
+  if (receiptDataOrUrl.startsWith('/uploads/')) {
+    return { receiptUrl: receiptDataOrUrl, fileName: originalFileName || path.basename(receiptDataOrUrl) };
+  }
+
+  // Check if it's a base64 Data URI
+  const matches = receiptDataOrUrl.match(/^data:([A-Za-z0-9+/.-]+);base64,(.+)$/);
+  if (!matches) {
+    return { receiptUrl: receiptDataOrUrl, fileName: originalFileName || 'receipt.jpg' };
+  }
+
+  const mimeType = matches[1];
+  const base64Data = matches[2];
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  const extMap: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'application/pdf': 'pdf',
+  };
+  const ext = extMap[mimeType] || 'jpg';
+  const cleanRef = ref.replace(/[^a-zA-Z0-9-]/g, '_');
+  const fileName = `receipt_${cleanRef}_${Date.now()}.${ext}`;
+
+  let finalUrl = receiptDataOrUrl; // Base64 serves as fail-safe fallback
+
+  // 1. Try uploading to Supabase Storage Bucket ('receipts' or 'media')
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      // Ensure 'receipts' bucket exists
+      try {
+        const { data: bucketData } = await supabase.storage.getBucket('receipts');
+        if (!bucketData) {
+          await supabase.storage.createBucket('receipts', {
+            public: true,
+            fileSizeLimit: 10485760,
+          });
+        }
+      } catch {
+        // Proceed even if getBucket/createBucket throws (e.g. lack of direct RPC permission)
+      }
+
+      let targetBucket = 'receipts';
+      let targetPath = fileName;
+
+      let { data: uploadRes, error: uploadErr } = await supabase.storage
+        .from(targetBucket)
+        .upload(targetPath, buffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      // If 'receipts' bucket failed, try 'media' bucket
+      if (uploadErr) {
+        console.warn('Failed upload to receipts bucket, trying media bucket:', uploadErr.message);
+        targetBucket = 'media';
+        targetPath = `receipts/${fileName}`;
+        const mediaUpload = await supabase.storage
+          .from(targetBucket)
+          .upload(targetPath, buffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
+        uploadRes = mediaUpload.data;
+        uploadErr = mediaUpload.error;
+      }
+
+      if (!uploadErr && uploadRes?.path) {
+        const { data: publicUrlData } = supabase.storage
+          .from(targetBucket)
+          .getPublicUrl(uploadRes.path);
+        if (publicUrlData?.publicUrl) {
+          finalUrl = publicUrlData.publicUrl;
+        }
+      }
+    } catch (sbStorageErr) {
+      console.warn('Supabase storage upload error:', sbStorageErr);
+    }
+  }
+
+  // 2. Try saving to local filesystem public/uploads/receipts/
+  try {
+    const receiptsDir = path.join(process.cwd(), 'public', 'uploads', 'receipts');
+    if (!fs.existsSync(receiptsDir)) {
+      fs.mkdirSync(receiptsDir, { recursive: true });
+    }
+    const localFilePath = path.join(receiptsDir, fileName);
+    fs.writeFileSync(localFilePath, buffer);
+    // If Supabase did not provide a public URL, use local URL
+    if (!finalUrl || finalUrl.startsWith('data:')) {
+      finalUrl = `/uploads/receipts/${fileName}`;
+    }
+  } catch (fsErr) {
+    console.warn('Local disk save notice (read-only):', fsErr);
+  }
+
+  // 3. Register in Supabase 'media' table if connected
+  if (supabase && finalUrl && !finalUrl.startsWith('data:')) {
+    try {
+      await supabase.from('media').insert({
+        file_name: fileName,
+        file_url: finalUrl,
+        file_type: mimeType.startsWith('image/') ? 'image' : 'document',
+        file_size: buffer.length,
+        alt_text: `Payment Receipt for Booking ${ref}`,
+        usage_context: 'receipt',
+      });
+    } catch {
+      // Ignore media table insert errors
+    }
+  }
+
+  return { receiptUrl: finalUrl, fileName };
 }
 
 export async function GET() {
@@ -89,44 +253,92 @@ export async function GET() {
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const supabaseBookings: StoredBooking[] = data.map((b: any) => ({
-          id: b.id,
-          ref: b.reference_number,
-          guestName: b.guests?.full_name || 'Guest',
-          phone: b.guests?.phone || '',
-          whatsapp: b.guests?.whatsapp || b.guests?.phone || '',
-          email: b.guests?.email || '',
-          roomName: b.rooms?.name || 'Hotel Room',
-          roomSlug: b.rooms?.slug || '',
-          checkIn: b.check_in_date,
-          checkOut: b.check_out_date,
-          nights: b.total_nights || 1,
-          numGuests: b.num_guests || 1,
-          totalAmount: Number(b.total_amount) || 0,
-          paymentMethod: b.payment_method || 'transfer',
-          paymentReference: b.payment_reference || '',
-          amountPaid: Number(b.amount_paid) || Number(b.total_amount) || 0,
-          balanceDue: Number(b.balance_due) || 0,
-          roomNumber: b.room_number || b.assigned_room_number || '',
-          isWalkIn: Boolean(b.is_walk_in),
-          cashierName: b.cashier_name || '',
-          specialRequests: b.special_requests || '',
-          adminNotes: b.admin_notes || '',
-          paymentBank: 'Moniepoint Microfinance Bank',
-          paymentAccountNumber: '5326187865',
-          paymentAccountName: 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION',
-          // Map receipt_url from Supabase back to receiptImage for admin display
-          receiptImage: b.receipt_url || '',
-          receiptFileName: b.receipt_file_name || '',
-          status: b.booking_status || 'new',
-          paymentStatus: b.payment_status || 'not_paid',
-          createdAt: b.created_at,
-        }));
+        // Query files from 'receipts' bucket to correlate any receipt by reference
+        const bucketReceiptMap = new Map<string, string>();
+        try {
+          const { data: receiptFiles } = await supabase.storage.from('receipts').list();
+          if (receiptFiles && Array.isArray(receiptFiles)) {
+            for (const file of receiptFiles) {
+              const parts = file.name.split('_');
+              if (parts.length >= 2) {
+                const fileRef = parts[1];
+                const { data: pUrl } = supabase.storage.from('receipts').getPublicUrl(file.name);
+                if (pUrl?.publicUrl) {
+                  bucketReceiptMap.set(fileRef, pUrl.publicUrl);
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore bucket list errors
+        }
+
+        const supabaseBookings: StoredBooking[] = data.map((b: any) => {
+          const localMatch = localBookings.find(
+            (l) => l.ref === b.reference_number || l.id === b.id
+          );
+
+          // Priority for receipt image:
+          // 1. Direct receipt_url from Supabase row
+          // 2. Receipt image from localBookings matching ref
+          // 3. Receipt found directly in 'receipts' storage bucket matching ref
+          // 4. Fallback receipt_image
+          const receiptImg =
+            b.receipt_url ||
+            localMatch?.receiptImage ||
+            bucketReceiptMap.get(b.reference_number) ||
+            b.receipt_image ||
+            '';
+
+          const receiptFileName =
+            b.receipt_file_name ||
+            localMatch?.receiptFileName ||
+            (receiptImg && !receiptImg.startsWith('data:') ? path.basename(receiptImg) : '') ||
+            '';
+
+          return {
+            id: b.id,
+            ref: b.reference_number,
+            guestName: b.guests?.full_name || localMatch?.guestName || 'Guest',
+            phone: b.guests?.phone || localMatch?.phone || '',
+            whatsapp: b.guests?.whatsapp || b.guests?.phone || localMatch?.whatsapp || '',
+            email: b.guests?.email || localMatch?.email || '',
+            roomName: b.rooms?.name || localMatch?.roomName || 'Hotel Room',
+            roomSlug: b.rooms?.slug || localMatch?.roomSlug || '',
+            checkIn: b.check_in_date || localMatch?.checkIn,
+            checkOut: b.check_out_date || localMatch?.checkOut,
+            nights: b.total_nights || localMatch?.nights || 1,
+            numGuests: b.num_guests || localMatch?.numGuests || 1,
+            totalAmount: Number(b.total_amount) || localMatch?.totalAmount || 0,
+            paymentMethod: b.payment_method || localMatch?.paymentMethod || 'transfer',
+            paymentReference: b.payment_reference || localMatch?.paymentReference || '',
+            amountPaid: Number(b.amount_paid) || localMatch?.amountPaid || Number(b.total_amount) || 0,
+            balanceDue: Number(b.balance_due) || localMatch?.balanceDue || 0,
+            roomNumber: b.room_number || b.assigned_room_number || localMatch?.roomNumber || '',
+            isWalkIn: Boolean(b.is_walk_in || localMatch?.isWalkIn),
+            cashierName: b.cashier_name || localMatch?.cashierName || '',
+            specialRequests: b.special_requests || localMatch?.specialRequests || '',
+            paymentBank: 'Moniepoint Microfinance Bank',
+            paymentAccountNumber: '5326187865',
+            paymentAccountName: 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION',
+            receiptImage: receiptImg,
+            receiptFileName: receiptFileName,
+            status: b.booking_status || localMatch?.status || 'new',
+            paymentStatus: b.payment_status || localMatch?.paymentStatus || 'paid',
+            adminNotes: b.admin_notes || localMatch?.adminNotes || '',
+            createdAt: b.created_at || localMatch?.createdAt || new Date().toISOString(),
+          };
+        });
 
         // Merge: add any local bookings that aren't yet in Supabase
         const existingRefs = new Set(supabaseBookings.map((b) => b.ref));
         const missingLocal = localBookings.filter((b) => !existingRefs.has(b.ref));
         const merged = [...supabaseBookings, ...missingLocal];
+
+        // Keep local cache in sync with live receipts
+        try {
+          saveBookings(merged);
+        } catch {}
 
         return NextResponse.json({ success: true, bookings: merged });
       }
@@ -154,6 +366,20 @@ export async function POST(request: Request) {
     const amtPaid = Number(body.amountPaid ?? totalAmt);
     const balDue = Number(body.balanceDue ?? Math.max(0, totalAmt - amtPaid));
 
+    // Upload & persist receipt in storage bucket and local storage
+    let receiptUrl = body.receiptImage || '';
+    let receiptFileName = body.receiptFileName || '';
+
+    if (receiptUrl) {
+      try {
+        const receiptResult = await saveReceiptToStorage(ref, receiptUrl, receiptFileName);
+        receiptUrl = receiptResult.receiptUrl;
+        receiptFileName = receiptResult.fileName;
+      } catch (rErr) {
+        console.warn('Receipt processing error (falling back):', rErr);
+      }
+    }
+
     const newBooking: StoredBooking = {
       id: body.id || `b_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       ref,
@@ -179,10 +405,10 @@ export async function POST(request: Request) {
       paymentBank: body.paymentBank || 'Moniepoint Microfinance Bank',
       paymentAccountNumber: body.paymentAccountNumber || '5326187865',
       paymentAccountName: body.paymentAccountName || 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION',
-      receiptImage: body.receiptImage || '',
-      receiptFileName: body.receiptFileName || '',
+      receiptImage: receiptUrl,
+      receiptFileName: receiptFileName,
       status: body.status || (body.isWalkIn ? 'confirmed' : 'awaiting_confirmation'),
-      paymentStatus: body.paymentStatus || (balDue <= 0 ? 'paid' : amtPaid > 0 ? 'partial' : 'pending'),
+      paymentStatus: body.paymentStatus || (balDue <= 0 ? 'paid' : amtPaid > 0 ? 'partially_paid' : 'not_paid'),
       createdAt: new Date().toISOString(),
     };
 
@@ -190,40 +416,6 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
     if (supabase) {
       try {
-        // Upload receipt image to Supabase Storage if provided as base64
-        let receiptStorageUrl = body.receiptImage || '';
-        if (body.receiptImage && body.receiptImage.startsWith('data:') && supabase) {
-          try {
-            const matches = body.receiptImage.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-            if (matches && matches.length === 3) {
-              const mimeType = matches[1];
-              const base64Data = matches[2];
-              const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-              const fileName = `${ref}_${Date.now()}.${ext}`;
-              const buffer = Buffer.from(base64Data, 'base64');
-
-              const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('receipts')
-                .upload(fileName, buffer, {
-                  contentType: mimeType,
-                  upsert: true,
-                });
-
-              if (!uploadError && uploadData?.path) {
-                const { data: urlData } = supabase.storage
-                  .from('receipts')
-                  .getPublicUrl(uploadData.path);
-                if (urlData?.publicUrl) {
-                  receiptStorageUrl = urlData.publicUrl;
-                }
-              }
-            }
-          } catch (uploadErr) {
-            console.warn('Receipt upload to storage warning:', uploadErr);
-            // Keep the base64 as fallback
-          }
-        }
-
         // Insert or find guest
         let guestId: string | null = null;
         const { data: existingGuests } = await supabase
@@ -255,9 +447,21 @@ export async function POST(request: Request) {
           const { data: slugMatched } = await supabase
             .from('rooms')
             .select('id')
-            .or(`slug.eq.${body.roomSlug},slug.eq.${body.roomSlug}-room`)
+            .eq('slug', body.roomSlug)
             .limit(1);
-          if (slugMatched && slugMatched.length > 0) roomId = slugMatched[0].id;
+          if (slugMatched && slugMatched.length > 0) {
+            roomId = slugMatched[0].id;
+          }
+        }
+        if (!roomId && body.roomSlug) {
+          const { data: suffixedMatched } = await supabase
+            .from('rooms')
+            .select('id')
+            .eq('slug', `${body.roomSlug}-room`)
+            .limit(1);
+          if (suffixedMatched && suffixedMatched.length > 0) {
+            roomId = suffixedMatched[0].id;
+          }
         }
         if (!roomId) {
           const { data: nameMatched } = await supabase
@@ -265,34 +469,54 @@ export async function POST(request: Request) {
             .select('id')
             .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
             .limit(1);
-          if (nameMatched && nameMatched.length > 0) roomId = nameMatched[0].id;
+          if (nameMatched && nameMatched.length > 0) {
+            roomId = nameMatched[0].id;
+          }
         }
 
-        // Insert booking with receipt URL into Supabase
+        // Insert booking into Supabase
         if (guestId && roomId) {
-          await supabase.from('bookings').insert({
+          const fullPayload: any = {
             reference_number: ref,
             guest_id: guestId,
             room_id: roomId,
             check_in_date: body.checkIn,
             check_out_date: body.checkOut,
             num_guests: Number(body.numGuests) || 1,
-            total_amount: Number(body.totalAmount) || 0,
-            booking_status: 'awaiting_confirmation',
-            payment_status: 'awaiting_payment',
+            total_amount: totalAmt,
+            booking_status: newBooking.status,
+            payment_status: newBooking.paymentStatus,
             special_requests: body.specialRequests || null,
-            // Receipt saved to Supabase Storage
-            receipt_url: receiptStorageUrl,
-            receipt_file_name: body.receiptFileName || null,
-            payment_method: body.paymentMethod || 'bank_transfer',
+            admin_notes: body.adminNotes || null,
+            assigned_room_number: body.roomNumber || null,
+            receipt_url: receiptUrl,
+            receipt_file_name: receiptFileName,
+            payment_method: newBooking.paymentMethod,
             payment_reference: body.paymentReference || null,
-            amount_paid: Number(body.amountPaid) || 0,
-            balance_due: Number(body.balanceDue) || 0,
-          });
-        }
+            amount_paid: amtPaid,
+            balance_due: balDue,
+            is_walk_in: Boolean(body.isWalkIn),
+            cashier_name: body.cashierName || null,
+          };
 
-        // Update the newBooking with the storage URL so local JSON also has it
-        newBooking.receiptImage = receiptStorageUrl;
+          const { error: insErr } = await supabase.from('bookings').insert(fullPayload);
+          if (insErr) {
+            console.warn('Full booking insert warning (retrying basic payload):', insErr.message);
+            // Fallback for pre-migration schema
+            await supabase.from('bookings').insert({
+              reference_number: ref,
+              guest_id: guestId,
+              room_id: roomId,
+              check_in_date: body.checkIn,
+              check_out_date: body.checkOut,
+              num_guests: Number(body.numGuests) || 1,
+              total_amount: totalAmt,
+              booking_status: newBooking.status,
+              payment_status: newBooking.paymentStatus,
+              special_requests: body.specialRequests || null,
+            });
+          }
+        }
       } catch (sbErr) {
         console.warn('Supabase booking sync warning:', sbErr);
       }
@@ -320,7 +544,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, ref, status, paymentStatus, adminNotes } = body;
+    const { id, ref, status, paymentStatus, adminNotes, receiptUrl } = body;
 
     if (!id && !ref) {
       return NextResponse.json({ success: false, error: 'Booking ID or Ref required' }, { status: 400 });
@@ -334,6 +558,7 @@ export async function PATCH(request: NextRequest) {
         if (status !== undefined) updatePayload.booking_status = status;
         if (paymentStatus !== undefined) updatePayload.payment_status = paymentStatus;
         if (adminNotes !== undefined) updatePayload.admin_notes = adminNotes;
+        if (receiptUrl !== undefined) updatePayload.receipt_url = receiptUrl;
 
         if (ref) {
           await supabase.from('bookings').update(updatePayload).eq('reference_number', ref);
@@ -353,6 +578,7 @@ export async function PATCH(request: NextRequest) {
       if (status !== undefined) bookings[index].status = status;
       if (paymentStatus !== undefined) bookings[index].paymentStatus = paymentStatus;
       if (adminNotes !== undefined) bookings[index].adminNotes = adminNotes;
+      if (receiptUrl !== undefined) bookings[index].receiptImage = receiptUrl;
       saveBookings(bookings);
     }
 

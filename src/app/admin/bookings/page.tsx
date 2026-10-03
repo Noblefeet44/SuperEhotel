@@ -109,6 +109,7 @@ const allBookings = [
 
 const statusFilters = [
   { value: 'all', label: 'All' },
+  { value: 'has_receipt', label: '📎 With Receipts' },
   { value: 'awaiting_confirmation', label: 'Awaiting Action' },
   { value: 'new', label: 'New' },
   { value: 'confirmed', label: 'Confirmed' },
@@ -182,6 +183,7 @@ export default function AdminBookingsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [viewTab, setViewTab] = useState<'bookings' | 'receipts'>('bookings');
   const [bookingsList, setBookingsList] = useState<AdminBookingItem[]>(allBookings);
   const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
   const [receiptModalImage, setReceiptModalImage] = useState<string | null>(null);
@@ -517,7 +519,12 @@ export default function AdminBookingsPage() {
   };
 
   const filteredBookings = bookingsList.filter((b) => {
-    const matchesFilter = filter === 'all' || b.status === filter;
+    const matchesFilter =
+      filter === 'all'
+        ? true
+        : filter === 'has_receipt'
+        ? Boolean(b.receiptImage)
+        : b.status === filter;
     const matchesSearch =
       search === '' ||
       b.guest.toLowerCase().includes(search.toLowerCase()) ||
@@ -528,6 +535,7 @@ export default function AdminBookingsPage() {
 
   const countByStatus = (statusValue: string) => {
     if (statusValue === 'all') return bookingsList.length;
+    if (statusValue === 'has_receipt') return bookingsList.filter((b) => Boolean(b.receiptImage)).length;
     return bookingsList.filter((b) => b.status === statusValue).length;
   };
 
@@ -611,29 +619,364 @@ export default function AdminBookingsPage() {
 
       <main className="admin-main" style={{ minWidth: 0, width: '100%', maxWidth: '100vw', overflowX: 'hidden', boxSizing: 'border-box' }}>
         {/* Header */}
-        <div className="admin-header" style={{ marginBottom: '0.75rem', width: '100%', boxSizing: 'border-box', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div className="admin-header" style={{ marginBottom: '0.75rem', width: '100%', boxSizing: 'border-box', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Guest Bookings</h1>
+            <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Guest Bookings &amp; Receipts</h1>
             <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#64748B' }}>
-              Check reservations, verify guest payments, and record front desk walk-ins.
+              Check reservations, verify guest payment receipts, and record front desk walk-ins.
             </p>
           </div>
-          <button
-            onClick={() => setIsWalkInModalOpen(true)}
-            type="button"
-            className="btn btn-primary"
-            style={{
-              backgroundColor: '#16A34A',
-              borderColor: '#16A34A',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <UserPlus size={16} /> + New Walk-In Booking (Front Desk)
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '3px' }}>
+              <button
+                onClick={() => setViewTab('bookings')}
+                type="button"
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: '7px',
+                  border: 'none',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backgroundColor: viewTab === 'bookings' ? '#FFFFFF' : 'transparent',
+                  color: viewTab === 'bookings' ? '#0F172A' : '#64748B',
+                  boxShadow: viewTab === 'bookings' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <CalendarCheck size={14} /> Bookings ({bookingsList.length})
+              </button>
+              <button
+                onClick={() => setViewTab('receipts')}
+                type="button"
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: '7px',
+                  border: 'none',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backgroundColor: viewTab === 'receipts' ? '#FFFFFF' : 'transparent',
+                  color: viewTab === 'receipts' ? '#166534' : '#64748B',
+                  boxShadow: viewTab === 'receipts' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <Receipt size={14} style={{ color: '#16A34A' }} /> Receipts Bucket ({countByStatus('has_receipt')})
+              </button>
+            </div>
+            <button
+              onClick={() => setIsWalkInModalOpen(true)}
+              type="button"
+              className="btn btn-primary"
+              style={{
+                backgroundColor: '#16A34A',
+                borderColor: '#16A34A',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <UserPlus size={16} /> + Walk-In
+            </button>
+          </div>
         </div>
+
+        {viewTab === 'receipts' ? (
+          /* =========================================================
+             RECEIPTS BUCKET GALLERY VIEW
+             ========================================================= */
+          <div style={{ width: '100%', boxSizing: 'border-box', marginBottom: '1.5rem' }}>
+            {/* Supabase Storage Bucket Header */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
+                border: '1px solid #86EFAC',
+                borderRadius: '14px',
+                padding: '1rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ backgroundColor: '#16A34A', color: '#FFFFFF', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Receipt size={22} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, color: '#14532D', fontSize: '0.95rem' }}>
+                      Storage Bucket: receipts
+                    </span>
+                    <span style={{ fontSize: '0.64rem', backgroundColor: '#16A34A', color: '#FFFFFF', padding: '2px 8px', borderRadius: '999px', fontWeight: 800 }}>
+                      Live Storage Connected
+                    </span>
+                  </div>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.76rem', color: '#166534' }}>
+                    Every customer bank transfer screenshot uploaded on the website is safely preserved in the receipts bucket and linked to their booking.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#166534', backgroundColor: '#FFFFFF', padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                  Total Receipts: {countByStatus('has_receipt')}
+                </span>
+              </div>
+            </div>
+
+            {/* Search Input for Receipts */}
+            <div style={{ position: 'relative', marginBottom: '1rem', width: '100%', boxSizing: 'border-box' }}>
+              <Search
+                size={17}
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#94A3B8',
+                }}
+              />
+              <input
+                type="text"
+                className="input"
+                placeholder="Search receipts by guest name, phone, or booking reference..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  paddingLeft: '38px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FFFFFF',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontSize: '0.85rem',
+                }}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  type="button"
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#94A3B8',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Receipts Cards Grid */}
+            {bookingsList.filter((b) => Boolean(b.receiptImage) && (search === '' || b.guest.toLowerCase().includes(search.toLowerCase()) || b.ref.toLowerCase().includes(search.toLowerCase()) || b.phone.includes(search))).length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '3.5rem 1rem',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '14px',
+                  border: '1px solid #E2E8F0',
+                  color: '#64748B',
+                }}
+              >
+                <Receipt size={42} style={{ margin: '0 auto 0.5rem', opacity: 0.4, color: '#16A34A' }} />
+                <h4 style={{ margin: '0 0 0.25rem', color: '#0F172A', fontSize: '1.05rem', fontWeight: 800 }}>No Receipts Found</h4>
+                <p style={{ margin: 0, fontSize: '0.8rem' }}>
+                  {search ? 'No receipts match your search.' : 'When guests upload proof of transfer on the booking page, their receipts will automatically appear in this bucket.'}
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '1rem',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {bookingsList
+                  .filter((b) => Boolean(b.receiptImage) && (search === '' || b.guest.toLowerCase().includes(search.toLowerCase()) || b.ref.toLowerCase().includes(search.toLowerCase()) || b.phone.includes(search)))
+                  .map((booking) => (
+                    <div
+                      key={booking.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '14px',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
+                    >
+                      {/* Image Viewer Frame */}
+                      <div
+                        onClick={() => setReceiptModalImage(booking.receiptImage!)}
+                        style={{
+                          height: '190px',
+                          backgroundColor: '#0F172A',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderBottom: '1px solid #E2E8F0',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={booking.receiptImage}
+                          alt={`Receipt ${booking.ref}`}
+                          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            right: '8px',
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            color: '#FFFFFF',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Eye size={12} /> Click to View Full Size
+                        </div>
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            left: '8px',
+                            backgroundColor: '#16A34A',
+                            color: '#FFFFFF',
+                            fontSize: '0.64rem',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <CheckCircle2 size={11} /> Moniepoint Transfer
+                        </div>
+                      </div>
+
+                      {/* Details Box */}
+                      <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
+                            <div>
+                              <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0F172A' }}>
+                                {booking.guest}
+                              </h3>
+                              <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#64748B' }}>
+                                {booking.ref}
+                              </span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '1rem', fontWeight: 800, color: '#16A34A', display: 'block' }}>
+                                {formatPrice(booking.amount)}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.64rem',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '999px',
+                                  display: 'inline-block',
+                                  background: `${paymentColors[booking.payment] || '#64748B'}18`,
+                                  color: paymentColors[booking.payment] || '#64748B',
+                                }}
+                              >
+                                ● {paymentLabels[booking.payment] || booking.payment}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '0.5rem 0.65rem', fontSize: '0.74rem', marginBottom: '0.65rem' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
+                              {booking.room} {booking.roomNumber ? `• Unit ${booking.roomNumber}` : ''}
+                            </div>
+                            <div style={{ color: '#64748B' }}>
+                              📅 {formatDate(booking.checkIn)} &rarr; {formatDate(booking.checkOut)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModalImage(booking.receiptImage!)}
+                            className="btn btn-sm"
+                            style={{
+                              flex: 1,
+                              backgroundColor: '#DCFCE7',
+                              color: '#166534',
+                              border: '1px solid #BBF7D0',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBooking(booking)}
+                            className="btn btn-sm btn-outline"
+                            style={{
+                              flex: 1,
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            Manage
+                          </button>
+                          <a
+                            href={generateWhatsAppURL(
+                              booking.whatsapp,
+                              `Hello ${booking.guest}! We have received and verified your payment receipt for booking ${booking.ref}. Your room reservation at Super E Luxury Hotel is confirmed!`
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-whatsapp"
+                            style={{ padding: '0.45rem', justifyContent: 'center' }}
+                            title="WhatsApp guest"
+                          >
+                            <MessageCircle size={14} />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* =========================================================
+             ORIGINAL TABLE & MOBILE CARDS VIEW
+             ========================================================= */
+          <>
 
         {/* Filter Pills */}
         <div className="admin-mobile-filter-strip" style={{ width: '100%', boxSizing: 'border-box' }}>
@@ -1130,24 +1473,35 @@ export default function AdminBookingsPage() {
                           Due: {formatPrice(booking.balanceDue)}
                         </span>
                       )}
-                      {booking.receiptImage && (
+                      {booking.receiptImage ? (
                         <button
                           onClick={() => setReceiptModalImage(booking.receiptImage!)}
                           type="button"
                           style={{
-                            fontSize: '0.7rem',
-                            color: 'var(--color-success)',
-                            fontWeight: 600,
-                            background: 'none',
-                            border: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.72rem',
+                            color: '#166534',
+                            backgroundColor: '#DCFCE7',
+                            border: '1px solid #86EFAC',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontWeight: 700,
                             cursor: 'pointer',
-                            textAlign: 'left',
-                            padding: 0,
+                            marginTop: '2px',
+                            width: 'fit-content',
+                            boxShadow: '0 1px 2px rgba(22, 163, 74, 0.1)',
                           }}
+                          title="Click to view guest payment proof screenshot"
                         >
-                          ✓ View Receipt
+                          <Receipt size={12} /> View Receipt
                         </button>
-                      )}
+                      ) : !booking.isWalkIn ? (
+                        <span style={{ fontSize: '0.66rem', color: '#94A3B8', marginTop: '2px' }}>
+                          No receipt attached
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                   <td>
@@ -1188,6 +1542,8 @@ export default function AdminBookingsPage() {
             </tbody>
           </table>
         </div>
+        </>
+        )}
 
         {/* Modal: Receipt Image Viewer */}
         {receiptModalImage && (
@@ -1380,6 +1736,117 @@ export default function AdminBookingsPage() {
                   </p>
                 </div>
               )}
+
+              {/* Payment Proof Receipt Card */}
+              <div
+                style={{
+                  backgroundColor: selectedBooking.receiptImage ? '#F0FDF4' : '#F8FAFC',
+                  border: selectedBooking.receiptImage ? '1px solid #BBF7D0' : '1px solid #E2E8F0',
+                  borderRadius: '12px',
+                  padding: '0.85rem',
+                  marginBottom: '0.85rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Receipt size={16} style={{ color: selectedBooking.receiptImage ? '#16A34A' : '#64748B' }} />
+                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F172A' }}>
+                      Payment Transfer Receipt
+                    </span>
+                  </div>
+                  {selectedBooking.receiptImage ? (
+                    <span style={{ fontSize: '0.66rem', backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 800, padding: '2px 8px', borderRadius: '999px' }}>
+                      ✓ Stored in Receipts Bucket
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.66rem', backgroundColor: '#F1F5F9', color: '#64748B', fontWeight: 700, padding: '2px 8px', borderRadius: '999px' }}>
+                      No Receipt Attached
+                    </span>
+                  )}
+                </div>
+
+                {selectedBooking.receiptImage ? (
+                  <div>
+                    <div
+                      onClick={() => setReceiptModalImage(selectedBooking.receiptImage!)}
+                      style={{
+                        position: 'relative',
+                        height: '140px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        backgroundColor: '#0F172A',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '1px solid #86EFAC',
+                      }}
+                      title="Click to view full size receipt"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedBooking.receiptImage}
+                        alt="Payment Receipt"
+                        style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: '6px',
+                          right: '6px',
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          color: '#FFFFFF',
+                          fontSize: '0.68rem',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Eye size={12} /> Click to View Full Size
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => setReceiptModalImage(selectedBooking.receiptImage!)}
+                        className="btn btn-sm"
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#16A34A',
+                          color: '#FFFFFF',
+                          fontWeight: 700,
+                          fontSize: '0.74rem',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Eye size={14} /> Open Full Receipt
+                      </button>
+                      <a
+                        href={selectedBooking.receiptImage}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-sm btn-outline"
+                        style={{
+                          flex: 1,
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <ExternalLink size={14} /> Open New Tab
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>
+                    {selectedBooking.isWalkIn
+                      ? 'This reservation was handled at the front desk cashier as walk-in.'
+                      : 'Guest did not attach a bank transfer receipt screenshot during booking.'}
+                  </p>
+                )}
+              </div>
 
               {/* Status Controls */}
               <div

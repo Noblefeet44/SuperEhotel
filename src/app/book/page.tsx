@@ -142,21 +142,61 @@ function BookPageContent() {
     }
   };
 
-  const handleReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, receipt: 'File is too large (maximum 10MB)' }));
+      if (file.size > 15 * 1024 * 1024) {
+        setErrors((prev) => ({ ...prev, receipt: 'File is too large (maximum 15MB)' }));
         return;
       }
       setReceiptFile(file);
       setErrors((prev) => ({ ...prev, receipt: undefined }));
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setReceiptPreview(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      // If it's an image, optimize/compress via canvas for fast upload & maximum clarity
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new window.Image();
+          img.onload = () => {
+            const MAX_DIM = 1600;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > MAX_DIM) {
+                height = Math.round((height * MAX_DIM) / width);
+                width = MAX_DIM;
+              }
+            } else {
+              if (height > MAX_DIM) {
+                width = Math.round((width * MAX_DIM) / height);
+                height = MAX_DIM;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedData = canvas.toDataURL('image/jpeg', 0.86);
+              setReceiptPreview(compressedData);
+            } else {
+              setReceiptPreview(event.target?.result as string);
+            }
+          };
+          img.onerror = () => {
+            setReceiptPreview(event.target?.result as string);
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setReceiptPreview(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -245,33 +285,6 @@ function BookPageContent() {
     setIsSubmitting(true);
     const ref = bookingRef || generateBookingReference();
 
-    // Step 1: Upload receipt to Supabase Storage via the upload API
-    // This gives a permanent public URL the admin can always view
-    let receiptImageUrl = receiptPreview || '';
-    let receiptFileName = receiptFile?.name || 'payment-receipt.png';
-
-    if (receiptFile) {
-      try {
-        const formData = new FormData();
-        formData.append('file', receiptFile);
-        formData.append('category', 'receipts');
-
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'X-Admin-Auth': 'true' },
-          body: formData,
-        });
-        const uploadData = await uploadRes.json();
-        if (uploadData.success && uploadData.url) {
-          receiptImageUrl = uploadData.url;
-          receiptFileName = uploadData.fileName || receiptFileName;
-        }
-      } catch (uploadErr) {
-        console.warn('Receipt upload warning, using base64 fallback:', uploadErr);
-        // fallback: receiptImageUrl stays as base64 from receiptPreview
-      }
-    }
-
     const bookingPayload = {
       ref,
       guestName: bookingData.fullName,
@@ -289,25 +302,29 @@ function BookPageContent() {
       paymentBank: OFFICIAL_BANK_ACCOUNT.bankName,
       paymentAccountNumber: OFFICIAL_BANK_ACCOUNT.accountNumber,
       paymentAccountName: OFFICIAL_BANK_ACCOUNT.accountName,
-      receiptImage: receiptImageUrl,
-      receiptFileName,
+      receiptImage: receiptPreview || '',
+      receiptFileName: receiptFile?.name || 'payment-receipt.png',
       status: 'awaiting_confirmation',
-      paymentStatus: 'awaiting_payment',
+      paymentStatus: 'paid',
       createdAt: new Date().toISOString(),
     };
 
-    // Step 2: Save booking + receipt URL to backend API
+    // 1. Save to backend API
     try {
-      await fetch('/api/bookings', {
+      const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bookingPayload),
       });
+      const data = await res.json();
+      if (data.success && data.booking?.receiptImage) {
+        bookingPayload.receiptImage = data.booking.receiptImage;
+      }
     } catch (err) {
       console.error('Error saving booking to API:', err);
     }
 
-    // Step 3: Also save to guest localStorage for offline resilience
+    // 2. Also save to guest localStorage for offline resilience
     try {
       const existing = JSON.parse(localStorage.getItem('super_e_guest_bookings') || '[]');
       existing.unshift(bookingPayload);
@@ -320,7 +337,6 @@ function BookPageContent() {
     setIsConfirmed(true);
     setStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-
 
     // 3. Prepare and open prefilled WhatsApp message with all booking + payment information
     const whatsappUrl = generateWhatsAppBookingMessage(HOTEL_INFO.whatsappNumber, {

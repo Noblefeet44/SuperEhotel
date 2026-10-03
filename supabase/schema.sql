@@ -228,6 +228,14 @@ CREATE TABLE bookings (
   admin_notes TEXT,
   assigned_room_number TEXT,
   cancelled_reason TEXT,
+  receipt_url TEXT,
+  receipt_file_name TEXT,
+  payment_method TEXT DEFAULT 'transfer',
+  payment_reference TEXT,
+  amount_paid DECIMAL(12, 2),
+  balance_due DECIMAL(12, 2),
+  is_walk_in BOOLEAN DEFAULT false,
+  cashier_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -491,8 +499,58 @@ CREATE POLICY "Admin full access gym_subscriptions" ON gym_subscriptions FOR ALL
 CREATE TRIGGER update_gym_subscriptions_updated_at BEFORE UPDATE ON gym_subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
--- STORAGE BUCKET FOR MEDIA
+-- STORAGE BUCKETS FOR MEDIA & PAYMENT RECEIPTS
 -- =====================================================
--- Run this in the Supabase dashboard under Storage:
--- Create a public bucket called "media" 
--- This will store hotel images uploaded from the admin dashboard
+-- Run this in your Supabase SQL Editor or create in Storage Dashboard:
+
+-- 1. Create Public Bucket for Hotel Images/Media
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'media',
+  'media',
+  true,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']
+)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Create Public Bucket for Customer Payment Receipts
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'receipts',
+  'receipts',
+  true,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Storage Policies for 'receipts'
+CREATE POLICY "Public read receipts bucket" ON storage.objects
+  FOR SELECT USING (bucket_id = 'receipts');
+
+CREATE POLICY "Public insert receipts bucket" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'receipts');
+
+CREATE POLICY "Admin manage receipts bucket" ON storage.objects
+  FOR ALL USING (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+
+-- Storage Policies for 'media'
+CREATE POLICY "Public read media bucket" ON storage.objects
+  FOR SELECT USING (bucket_id = 'media');
+
+CREATE POLICY "Admin manage media bucket" ON storage.objects
+  FOR ALL USING (bucket_id = 'media' AND auth.role() = 'authenticated');
+
+-- =====================================================
+-- 14. SAFE MIGRATIONS FOR EXISTING DATABASES
+-- (Run this if you already created the tables before)
+-- =====================================================
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS receipt_file_name TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'transfer';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(12, 2);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS balance_due DECIMAL(12, 2);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_walk_in BOOLEAN DEFAULT false;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cashier_name TEXT;
