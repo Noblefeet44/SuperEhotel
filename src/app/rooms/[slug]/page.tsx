@@ -7,8 +7,8 @@ import {
   ChevronRight, Shield, Phone, Sparkles, ShieldCheck, Clock
 } from 'lucide-react';
 import { formatPrice, generatePhoneURL, generateWhatsAppURL } from '@/lib/utils';
-import { INITIAL_ROOMS_DATA, HOTEL_INFO, HOTEL_POLICIES } from '@/lib/hotel-data';
-import { getServerRoomsData, getServerRoomBySlug } from '@/lib/server-rooms';
+import { HOTEL_INFO, HOTEL_POLICIES } from '@/lib/hotel-data';
+import { getServerRoomsDataAsync, getServerRoomBySlugAsync } from '@/lib/server-rooms';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export async function generateStaticParams() {
-  const rooms = getServerRoomsData();
+  const rooms = await getServerRoomsDataAsync();
   return rooms.map((room) => ({
     slug: room.slug,
   }));
@@ -28,9 +28,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const room = getServerRoomBySlug(slug) || INITIAL_ROOMS_DATA.find(
-    (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
-  );
+  const room = await getServerRoomBySlugAsync(slug);
   if (!room) return { title: 'Room Not Found | Super E Luxury Hotel' };
 
   return {
@@ -46,15 +44,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RoomDetailPage({ params }: Props) {
   const { slug } = await params;
-  const room = getServerRoomBySlug(slug) || INITIAL_ROOMS_DATA.find(
-    (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
-  );
+  const room = await getServerRoomBySlugAsync(slug);
 
   if (!room) {
     notFound();
   }
 
-  const allRooms = getServerRoomsData();
+  const allRooms = await getServerRoomsDataAsync();
   const otherRooms = allRooms.filter((r) => r.slug !== slug).slice(0, 3);
 
   const jsonLd = {
