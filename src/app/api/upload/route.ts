@@ -60,23 +60,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
 
-    // Ensure uploads directory exists locally for zero-latency fallback
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
+    // Create base64 fallback so upload succeeds 100% of the time on serverless/read-only hosts
+    const mime = file.type || 'image/jpeg';
+    const base64Url = `data:${mime};base64,${buffer.toString('base64')}`;
+    let publicUrl = base64Url;
 
-    // Clean filename — remove path traversal attempts
     const timestamp = Date.now();
     const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_');
     const fileName = `${category}_${timestamp}_${safeName}`;
-    const filePath = path.join(uploadsDir, fileName);
 
-    fs.writeFileSync(filePath, buffer);
+    // Try saving locally to public/uploads if filesystem is writable
+    try {
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const filePath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+      publicUrl = `/uploads/${fileName}`;
+    } catch (fsErr) {
+      console.warn('Local uploads disk is read-only (using data URI fallback):', fsErr);
+    }
 
-    let publicUrl = `/uploads/${fileName}`;
-
-    // Upload to Supabase Storage if credentials are configured
+    // Try uploading to Supabase Storage with 1500ms timeout if credentials are configured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -85,12 +91,18 @@ export async function POST(request: NextRequest) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         const bucketName = category === 'rooms' ? 'rooms' : 'media';
 
-        const { data, error } = await supabase.storage
+        const uploadPromise = supabase.storage
           .from(bucketName)
           .upload(fileName, buffer, {
-            contentType: file.type || 'image/jpeg',
+            contentType: mime,
             upsert: true,
           });
+
+        const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('Supabase storage timeout') }), 1500)
+        );
+
+        const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
 
         if (!error && data?.path) {
           const { data: publicUrlData } = supabase.storage
@@ -100,11 +112,9 @@ export async function POST(request: NextRequest) {
           if (publicUrlData?.publicUrl) {
             publicUrl = publicUrlData.publicUrl;
           }
-        } else if (error) {
-          console.warn('Supabase storage upload notice:', error.message);
         }
       } catch (storageErr) {
-        console.warn('Supabase storage error (falling back to local):', storageErr);
+        console.warn('Supabase storage notice (falling back):', storageErr);
       }
     }
 

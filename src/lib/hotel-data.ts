@@ -415,3 +415,52 @@ export function getRoomBySlug(slug: string): RoomCategoryData | undefined {
     (r) => r.slug === slug || r.id === slug || `${r.slug}-room` === slug || (slug === 'vip-luxury-suite' && r.slug === 'presidential-suite')
   );
 }
+
+/**
+ * Merges server rooms with client local storage.
+ * SERVER IS THE SOURCE OF TRUTH for images — uploaded photos and deletions
+ * performed via the admin panel are saved to Supabase and must not be
+ * reverted by stale localStorage cache.
+ *
+ * Rule: if the server has ANY photos stored (even defaults), prefer the server
+ * images. Only fall back to localStorage images if the server returns an empty
+ * photos array (which would mean Supabase has not yet been seeded).
+ */
+export function mergeRoomsWithServer(serverRooms: RoomCategoryData[]): RoomCategoryData[] {
+  if (!Array.isArray(serverRooms) || serverRooms.length === 0) {
+    return getStoredRoomsData();
+  }
+
+  const localRooms = getStoredRoomsData();
+
+  const merged = localRooms.map((local) => {
+    const srv = serverRooms.find((s) => s.id === local.id || s.slug === local.slug);
+    if (!srv) return local;
+
+    const localImgs = local.images && local.images.length > 0 ? local.images : (local.image ? [local.image] : []);
+    const srvImgs = srv.images && srv.images.length > 0 ? srv.images : (srv.image ? [srv.image] : []);
+
+    // SERVER IS AUTHORITATIVE for images.
+    // Use server images whenever the server has a non-empty list.
+    // Only fall back to local if server returned nothing.
+    const finalImages = srvImgs.length > 0 ? srvImgs : localImgs;
+
+    return {
+      ...local,
+      ...srv,
+      image: finalImages[0] || local.image || srv.image,
+      images: finalImages,
+      // Keep the most recent status (server wins for status too)
+      status: srv.status || local.status || 'available',
+      // Keep local units if they exist (unit management is local-first)
+      units: (local.units && local.units.length > 0) ? local.units : (srv.units || []),
+    };
+  });
+
+  // Preserve any custom tiers present on server that don't exist locally
+  const serverOnly = serverRooms.filter((s) => !localRooms.some((l) => l.id === s.id || l.slug === s.slug));
+  const finalAll = [...merged, ...serverOnly];
+
+  saveStoredRoomsData(finalAll);
+  return finalAll;
+}

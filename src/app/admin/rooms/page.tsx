@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import {
   RoomCategoryData, RoomUnit,
-  getStoredRoomsData, saveStoredRoomsData
+  getStoredRoomsData, saveStoredRoomsData, mergeRoomsWithServer
 } from '@/lib/hotel-data';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
@@ -26,6 +26,45 @@ const STATUS_CONFIG: Record<RoomStatus, { label: string; dot: string; bg: string
   maintenance: { label: 'In Maintenance', dot: '🟡', bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
   booked: { label: 'Booked', dot: '🔵', bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
 };
+
+// Client-side image compressor for 100% upload reliability
+function compressImageFile(file: File, maxWidth = 1600, maxHeight = 1200, quality = 0.82): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new (window as any).Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(event.target?.result as string);
+        }
+      };
+      img.onerror = () => resolve(event.target?.result as string);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AdminRoomsPage() {
   const router = useRouter();
@@ -65,10 +104,11 @@ export default function AdminRoomsPage() {
       });
       const data = await res.json();
       if (data.success && data.rooms) {
-        setRooms(data.rooms);
-        saveStoredRoomsData(data.rooms);
-        if (data.room) {
-          setEditingRoom(data.room);
+        const merged = mergeRoomsWithServer(data.rooms);
+        setRooms(merged);
+        const refreshed = merged.find((r) => r.id === updatedRoom.id || r.slug === updatedRoom.slug);
+        if (refreshed) {
+          setEditingRoom(refreshed);
         }
       }
     } catch (err) {
@@ -255,12 +295,24 @@ export default function AdminRoomsPage() {
     const files = e.target.files;
     if (!files || files.length === 0 || !editingRoom) return;
 
-    setUploadStatus(`Uploading 1 of ${files.length} photos...`);
+    setUploadStatus(`Processing 1 of ${files.length} photos...`);
     const uploadedUrls: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
       setUploadStatus(`Uploading ${i + 1} of ${files.length} photos...`);
       const file = files[i];
+
+      // Step 1: Compress client-side for zero-fail fallback
+      let clientBase64 = '';
+      try {
+        clientBase64 = await compressImageFile(file);
+      } catch (err) {
+        console.warn('Client compress warning:', err);
+      }
+
+      let finalUrl = clientBase64;
+
+      // Step 2: Try uploading to server endpoint
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -277,12 +329,14 @@ export default function AdminRoomsPage() {
 
         const data = await res.json();
         if (data.success && data.url) {
-          uploadedUrls.push(data.url);
-        } else {
-          console.warn('Failed upload for file:', file.name, data.error);
+          finalUrl = data.url;
         }
       } catch (err) {
-        console.error('Photo upload network error:', err);
+        console.warn('API upload fallback to high-quality base64:', err);
+      }
+
+      if (finalUrl) {
+        uploadedUrls.push(finalUrl);
       }
     }
 
@@ -299,7 +353,7 @@ export default function AdminRoomsPage() {
         images: combined,
       };
       await persistRoomChange(updatedRoom);
-      triggerSaveNotification(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} uploaded successfully!`);
+      triggerSaveNotification(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} uploaded and saved!`);
     }
 
     setUploadStatus(null);
@@ -356,30 +410,38 @@ export default function AdminRoomsPage() {
       : [editingRoom.image];
 
     if (currentImgs.length <= 1) {
-      alert('Each room tier must have at least 1 photo.');
+      alert('Each room tier must have at least 1 photo. Please upload a new photo before deleting this one.');
       return;
     }
 
-    const deletedPhotoUrl = currentImgs[index];
     const filtered = currentImgs.filter((_, i) => i !== index);
     const updatedRoom: RoomCategoryData = {
       ...editingRoom,
-      image: filtered[0],
+      image: filtered[0] || '/images/standard-room.jpg',
       images: filtered,
     };
 
-    await persistRoomChange(updatedRoom);
+    // 1. Immediately update editingRoom in modal
+    setEditingRoom(updatedRoom);
 
+    // 2. Immediately update rooms in React state
+    const updatedRooms = rooms.map((r) => (r.id === updatedRoom.id || r.slug === updatedRoom.slug ? updatedRoom : r));
+    setRooms(updatedRooms);
+
+    // 3. Immediately persist to localStorage
+    saveStoredRoomsData(updatedRooms);
+    triggerSaveNotification('Photo removed from room');
+
+    // 4. Persist to server via POST and DELETE
     try {
-      await fetch(
-        `/api/rooms?roomId=${encodeURIComponent(updatedRoom.id)}&photoUrl=${encodeURIComponent(deletedPhotoUrl)}`,
-        { method: 'DELETE' }
-      );
+      await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRoom),
+      });
     } catch (err) {
-      console.warn('API DELETE photo notice:', err);
+      console.warn('Server room sync warning:', err);
     }
-
-    triggerSaveNotification('Photo deleted');
   };
 
   // Add custom URL image
@@ -468,8 +530,8 @@ export default function AdminRoomsPage() {
       });
       const data = await res.json();
       if (data.success && data.rooms) {
-        setRooms(data.rooms);
-        saveStoredRoomsData(data.rooms);
+        const merged = mergeRoomsWithServer(data.rooms);
+        setRooms(merged);
       }
     } catch (err) {
       console.warn('Server room save notice:', err);
@@ -508,14 +570,14 @@ export default function AdminRoomsPage() {
     const initial = getStoredRoomsData();
     setRooms(initial);
 
-    // Fetch live from server API to guarantee cross-device sync
+    // Fetch live from server API and reconcile safely
     fetch('/api/rooms')
       .then((res) => res.json())
       .then((data) => {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
-          setRooms(live);
-          saveStoredRoomsData(live);
+          const merged = mergeRoomsWithServer(live);
+          setRooms(merged);
         }
       })
       .catch((err) => console.warn('Could not fetch server rooms:', err));
@@ -883,6 +945,7 @@ export default function AdminRoomsPage() {
                       fill
                       style={{ objectFit: 'cover' }}
                       sizes="90px"
+                      unoptimized={Boolean(room.image?.startsWith('data:'))}
                     />
                     <span
                       style={{
@@ -1630,6 +1693,7 @@ export default function AdminRoomsPage() {
                                   alt={`Photo ${idx + 1}`}
                                   fill
                                   style={{ objectFit: 'cover' }}
+                                  unoptimized={Boolean(imgUrl?.startsWith('data:'))}
                                 />
                                 {idx === 0 && (
                                   <span

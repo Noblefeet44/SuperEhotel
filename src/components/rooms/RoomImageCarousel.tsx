@@ -103,6 +103,7 @@ export function RoomImageCarousel({
             style={{ objectFit: 'cover', transition: 'opacity 0.25s ease' }}
             sizes="(max-width: 768px) 100vw, 600px"
             priority={priority && safeIndex === 0}
+            unoptimized={Boolean((validImages[safeIndex] || fallbackImage)?.startsWith('data:'))}
           />
         </div>
 
@@ -383,6 +384,7 @@ export function RoomImageCarousel({
                 fill
                 style={{ objectFit: 'cover' }}
                 sizes="64px"
+                unoptimized={Boolean(img?.startsWith('data:'))}
               />
             </button>
           ))}
@@ -471,6 +473,7 @@ export function RoomImageCarousel({
                 style={{ objectFit: 'contain' }}
                 sizes="100vw"
                 priority
+                unoptimized={Boolean((validImages[safeIndex] || fallbackImage)?.startsWith('data:'))}
               />
             </div>
 
@@ -564,6 +567,7 @@ export function RoomImageCarousel({
                   fill
                   style={{ objectFit: 'cover' }}
                   sizes="60px"
+                  unoptimized={Boolean(img?.startsWith('data:'))}
                 />
               </button>
             ))}

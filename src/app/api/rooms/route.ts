@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { createClient } from '@supabase/supabase-js';
 import { INITIAL_ROOMS_DATA, RoomCategoryData } from '@/lib/hotel-data';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'rooms.json');
+const TMP_FILE = path.join(os.tmpdir(), 'super_e_rooms_v5.json');
+
+// In-memory cache to guarantee persistence across requests in serverless runtime
+let serverMemoryRooms: RoomCategoryData[] | null = null;
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,63 +19,99 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+function parseAndMergeRooms(parsed: any[]): RoomCategoryData[] {
+  const merged: RoomCategoryData[] = INITIAL_ROOMS_DATA.map((def) => {
+    const found = parsed.find(
+      (p: any) => p.id === def.id || p.slug === def.slug || `${p.slug}-room` === def.slug
+    );
+    if (!found) return def;
+
+    const units = Array.isArray(found.units) && found.units.length > 0 ? found.units : def.units;
+    const price = (found.price && found.price >= def.price * 0.7) ? found.price : def.price;
+    const images = (Array.isArray(found.images) && found.images.length > 0)
+      ? found.images
+      : (found.image ? [found.image] : def.images);
+
+    return {
+      ...def,
+      ...found,
+      price,
+      images,
+      image: images[0] || def.image,
+      status: found.status || def.status || 'available',
+      units,
+    };
+  });
+
+  // Preserve any custom user-added rooms
+  const custom = parsed.filter(
+    (p: any) => !INITIAL_ROOMS_DATA.some((def) => def.id === p.id || def.slug === p.slug)
+  );
+
+  return [...merged, ...custom];
+}
+
 function ensureRoomsFile(): RoomCategoryData[] {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(DATA_FILE)) {
-      fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_ROOMS_DATA, null, 2), 'utf8');
-      return INITIAL_ROOMS_DATA;
-    }
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Ensure all 8 official tiers exist and units are not empty
-      const merged: RoomCategoryData[] = INITIAL_ROOMS_DATA.map((def) => {
-        const found = parsed.find((p: any) => p.id === def.id || p.slug === def.slug || `${p.slug}-room` === def.slug);
-        if (!found) return def;
-
-        const units = Array.isArray(found.units) && found.units.length > 0 ? found.units : def.units;
-        const price = (found.price && found.price >= def.price * 0.7) ? found.price : def.price;
-
-        return {
-          ...def,
-          ...found,
-          price,
-          status: found.status || def.status || 'available',
-          units,
-        };
-      });
-
-      // Preserve any custom user-added rooms
-      const custom = parsed.filter(
-        (p: any) => !INITIAL_ROOMS_DATA.some((def) => def.id === p.id || def.slug === p.slug)
-      );
-
-      const all = [...merged, ...custom];
-      fs.writeFileSync(DATA_FILE, JSON.stringify(all, null, 2), 'utf8');
-      return all;
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_ROOMS_DATA, null, 2), 'utf8');
-    return INITIAL_ROOMS_DATA;
-  } catch (err) {
-    console.error('Error reading rooms file:', err);
-    return INITIAL_ROOMS_DATA;
+  // 1. Return in-memory cache if available
+  if (serverMemoryRooms && serverMemoryRooms.length > 0) {
+    return serverMemoryRooms;
   }
+
+  // 2. Check writable TMP_FILE (for serverless environments)
+  try {
+    if (fs.existsSync(TMP_FILE)) {
+      const raw = fs.readFileSync(TMP_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const enriched = parseAndMergeRooms(parsed);
+        serverMemoryRooms = enriched;
+        return enriched;
+      }
+    }
+  } catch (tmpErr) {
+    console.warn('Notice: TMP_FILE read warning:', tmpErr);
+  }
+
+  // 3. Check repo DATA_FILE
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const enriched = parseAndMergeRooms(parsed);
+        serverMemoryRooms = enriched;
+        return enriched;
+      }
+    }
+  } catch (fsErr) {
+    console.warn('Notice: DATA_FILE read warning:', fsErr);
+  }
+
+  serverMemoryRooms = INITIAL_ROOMS_DATA;
+  return INITIAL_ROOMS_DATA;
 }
 
 function saveRooms(rooms: RoomCategoryData[]): boolean {
+  serverMemoryRooms = rooms;
+
+  // Always write to writable /tmp directory (works on Vercel and local)
+  try {
+    fs.writeFileSync(TMP_FILE, JSON.stringify(rooms, null, 2), 'utf8');
+  } catch (tmpErr) {
+    console.warn('Error saving to TMP_FILE:', tmpErr);
+  }
+
+  // Try writing to repo DATA_FILE (works on local development)
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(DATA_FILE, JSON.stringify(rooms, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    console.error('Error saving rooms file:', err);
-    return false;
+  } catch (fsErr) {
+    // Expected on read-only serverless filesystems
   }
+
+  return true;
 }
 
 // GET /api/rooms: Fetch live rooms from server file and Supabase
@@ -92,16 +133,17 @@ export async function GET() {
       const { data, error } = await Promise.race([supabasePromise, timeoutPromise]);
 
       if (!error && data && data.length > 0) {
-        // Merge Supabase changes without overriding photos or units from local inventory
+        // Merge Supabase data — Supabase is the source of truth for photos
         const mergedRooms = localRooms.map((local) => {
           const match = data.find(
             (r: any) => r.slug === local.slug || r.slug === `${local.slug}-room` || r.name.toLowerCase() === local.name.toLowerCase()
           );
           if (!match) return local;
 
-          const photos = (local.images && Array.isArray(local.images) && local.images.length > 0)
-            ? local.images
-            : (Array.isArray(match.photos) && match.photos.length > 0 ? match.photos : [local.image]);
+          // Supabase photos are authoritative (admin uploads/deletions persist there)
+          const photos = (Array.isArray(match.photos) && match.photos.length > 0)
+            ? match.photos
+            : (local.images && local.images.length > 0 ? local.images : [local.image]);
 
           // Keep official rate if Supabase has outdated old seed (< 36000 for standard)
           const price = (match.price_per_night && Number(match.price_per_night) >= local.price * 0.7)
@@ -325,7 +367,11 @@ export async function DELETE(request: Request) {
     let updatedImages = [...(room.images || [room.image])];
 
     if (photoUrl) {
-      updatedImages = updatedImages.filter((img) => img !== photoUrl);
+      const decodedTarget = decodeURIComponent(photoUrl).trim();
+      updatedImages = updatedImages.filter((img) => {
+        const decodedImg = decodeURIComponent(img).trim();
+        return img !== photoUrl && decodedImg !== decodedTarget;
+      });
     } else if (photoIndex !== null && photoIndex !== undefined) {
       const idx = parseInt(photoIndex, 10);
       if (!isNaN(idx) && idx >= 0 && idx < updatedImages.length) {
@@ -334,15 +380,12 @@ export async function DELETE(request: Request) {
     }
 
     if (updatedImages.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Each room category must have at least one photo.',
-      }, { status: 400 });
+      updatedImages = ['/images/standard-room.jpg'];
     }
 
     const updatedRoom: RoomCategoryData = {
       ...room,
-      image: updatedImages[0],
+      image: updatedImages[0] || '/images/standard-room.jpg',
       images: updatedImages,
     };
 

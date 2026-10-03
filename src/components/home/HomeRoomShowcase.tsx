@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Users, Bed, ChevronRight } from 'lucide-react';
-import { RoomCategoryData, getStoredRoomsData, saveStoredRoomsData, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
+import { RoomCategoryData, getStoredRoomsData, saveStoredRoomsData, mergeRoomsWithServer, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 import { formatPrice } from '@/lib/utils';
 
@@ -30,8 +30,8 @@ export function HomeRoomShowcase({ initialRooms }: HomeRoomShowcaseProps) {
       .then((data) => {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
-          setRooms(live);
-          saveStoredRoomsData(live);
+          const merged = mergeRoomsWithServer(live);
+          setRooms(merged);
         }
       })
       .catch((err) => console.warn('Could not fetch latest rooms:', err));

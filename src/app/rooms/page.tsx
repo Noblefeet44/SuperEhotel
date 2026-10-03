@@ -10,7 +10,7 @@ import {
 import { formatPrice } from '@/lib/utils';
 import {
   RoomCategoryData, HOTEL_INFO,
-  getStoredRoomsData, saveStoredRoomsData
+  getStoredRoomsData, saveStoredRoomsData, mergeRoomsWithServer
 } from '@/lib/hotel-data';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
 import { HotelPoliciesModal } from '@/components/common/HotelPoliciesModal';
@@ -28,8 +28,8 @@ export default function RoomsPage() {
       .then((data) => {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
-          setRooms(live);
-          saveStoredRoomsData(live);
+          const merged = mergeRoomsWithServer(live);
+          setRooms(merged);
         }
       })
       .catch(() => {});

@@ -21,6 +21,7 @@ import {
   INITIAL_ROOMS_DATA,
   getStoredRoomsData,
   saveStoredRoomsData,
+  mergeRoomsWithServer,
   RoomCategoryData
 } from '@/lib/hotel-data';
 
@@ -101,8 +102,8 @@ function BookPageContent() {
       .then((data) => {
         const live = Array.isArray(data) ? data : (data.rooms || []);
         if (live.length > 0) {
-          setRooms(live);
-          saveStoredRoomsData(live);
+          const merged = mergeRoomsWithServer(live);
+          setRooms(merged);
         }
       })
       .catch(() => {});
