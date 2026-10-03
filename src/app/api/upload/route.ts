@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
       try {
         const supabase = createClient(supabaseUrl, supabaseKey);
-        const bucketName = category === 'rooms' ? 'rooms' : 'media';
+        const bucketName = category === 'rooms' ? 'rooms' : category === 'receipts' ? 'receipts' : 'media';
 
         const uploadPromise = supabase.storage
           .from(bucketName)

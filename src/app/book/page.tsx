@@ -245,6 +245,33 @@ function BookPageContent() {
     setIsSubmitting(true);
     const ref = bookingRef || generateBookingReference();
 
+    // Step 1: Upload receipt to Supabase Storage via the upload API
+    // This gives a permanent public URL the admin can always view
+    let receiptImageUrl = receiptPreview || '';
+    let receiptFileName = receiptFile?.name || 'payment-receipt.png';
+
+    if (receiptFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', receiptFile);
+        formData.append('category', 'receipts');
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'X-Admin-Auth': 'true' },
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.success && uploadData.url) {
+          receiptImageUrl = uploadData.url;
+          receiptFileName = uploadData.fileName || receiptFileName;
+        }
+      } catch (uploadErr) {
+        console.warn('Receipt upload warning, using base64 fallback:', uploadErr);
+        // fallback: receiptImageUrl stays as base64 from receiptPreview
+      }
+    }
+
     const bookingPayload = {
       ref,
       guestName: bookingData.fullName,
@@ -262,14 +289,14 @@ function BookPageContent() {
       paymentBank: OFFICIAL_BANK_ACCOUNT.bankName,
       paymentAccountNumber: OFFICIAL_BANK_ACCOUNT.accountNumber,
       paymentAccountName: OFFICIAL_BANK_ACCOUNT.accountName,
-      receiptImage: receiptPreview || '',
-      receiptFileName: receiptFile?.name || 'payment-receipt.png',
+      receiptImage: receiptImageUrl,
+      receiptFileName,
       status: 'awaiting_confirmation',
-      paymentStatus: 'paid',
+      paymentStatus: 'awaiting_payment',
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Save to backend API
+    // Step 2: Save booking + receipt URL to backend API
     try {
       await fetch('/api/bookings', {
         method: 'POST',
@@ -280,7 +307,7 @@ function BookPageContent() {
       console.error('Error saving booking to API:', err);
     }
 
-    // 2. Also save to guest localStorage for offline resilience
+    // Step 3: Also save to guest localStorage for offline resilience
     try {
       const existing = JSON.parse(localStorage.getItem('super_e_guest_bookings') || '[]');
       existing.unshift(bookingPayload);
@@ -293,6 +320,7 @@ function BookPageContent() {
     setIsConfirmed(true);
     setStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
 
     // 3. Prepare and open prefilled WhatsApp message with all booking + payment information
     const whatsappUrl = generateWhatsAppBookingMessage(HOTEL_INFO.whatsappNumber, {

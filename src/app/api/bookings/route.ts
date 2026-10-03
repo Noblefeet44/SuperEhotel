@@ -107,15 +107,19 @@ export async function GET() {
           paymentReference: b.payment_reference || '',
           amountPaid: Number(b.amount_paid) || Number(b.total_amount) || 0,
           balanceDue: Number(b.balance_due) || 0,
-          roomNumber: b.room_number || '',
+          roomNumber: b.room_number || b.assigned_room_number || '',
           isWalkIn: Boolean(b.is_walk_in),
           cashierName: b.cashier_name || '',
           specialRequests: b.special_requests || '',
+          adminNotes: b.admin_notes || '',
           paymentBank: 'Moniepoint Microfinance Bank',
           paymentAccountNumber: '5326187865',
           paymentAccountName: 'SUPER E LUXURY HOTEL AND SUITES LTD - RECEPTION',
+          // Map receipt_url from Supabase back to receiptImage for admin display
+          receiptImage: b.receipt_url || '',
+          receiptFileName: b.receipt_file_name || '',
           status: b.booking_status || 'new',
-          paymentStatus: b.payment_status || 'paid',
+          paymentStatus: b.payment_status || 'not_paid',
           createdAt: b.created_at,
         }));
 
@@ -186,6 +190,40 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
     if (supabase) {
       try {
+        // Upload receipt image to Supabase Storage if provided as base64
+        let receiptStorageUrl = body.receiptImage || '';
+        if (body.receiptImage && body.receiptImage.startsWith('data:') && supabase) {
+          try {
+            const matches = body.receiptImage.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+              const mimeType = matches[1];
+              const base64Data = matches[2];
+              const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+              const fileName = `${ref}_${Date.now()}.${ext}`;
+              const buffer = Buffer.from(base64Data, 'base64');
+
+              const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('receipts')
+                .upload(fileName, buffer, {
+                  contentType: mimeType,
+                  upsert: true,
+                });
+
+              if (!uploadError && uploadData?.path) {
+                const { data: urlData } = supabase.storage
+                  .from('receipts')
+                  .getPublicUrl(uploadData.path);
+                if (urlData?.publicUrl) {
+                  receiptStorageUrl = urlData.publicUrl;
+                }
+              }
+            }
+          } catch (uploadErr) {
+            console.warn('Receipt upload to storage warning:', uploadErr);
+            // Keep the base64 as fallback
+          }
+        }
+
         // Insert or find guest
         let guestId: string | null = null;
         const { data: existingGuests } = await supabase
@@ -213,38 +251,24 @@ export async function POST(request: Request) {
 
         // Find matching room
         let roomId: string | null = null;
-        // Use parameterized slug search first (safe from injection)
         if (body.roomSlug) {
           const { data: slugMatched } = await supabase
             .from('rooms')
             .select('id')
-            .eq('slug', body.roomSlug)
+            .or(`slug.eq.${body.roomSlug},slug.eq.${body.roomSlug}-room`)
             .limit(1);
-          if (slugMatched && slugMatched.length > 0) {
-            roomId = slugMatched[0].id;
-          }
+          if (slugMatched && slugMatched.length > 0) roomId = slugMatched[0].id;
         }
-        const { data: matchedRooms } = !roomId && body.roomSlug ? await supabase
-          .from('rooms')
-          .select('id')
-          .eq('slug', body.roomSlug)
-          .limit(1) : { data: null };
-
-        if (matchedRooms && matchedRooms.length > 0) {
-          roomId = matchedRooms[0].id;
-        } else {
-          // Fallback: try name search with separate query to avoid injection
+        if (!roomId) {
           const { data: nameMatched } = await supabase
             .from('rooms')
             .select('id')
             .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
             .limit(1);
-          if (nameMatched && nameMatched.length > 0) {
-            roomId = nameMatched[0].id;
-          }
+          if (nameMatched && nameMatched.length > 0) roomId = nameMatched[0].id;
         }
 
-        // Insert booking into Supabase
+        // Insert booking with receipt URL into Supabase
         if (guestId && roomId) {
           await supabase.from('bookings').insert({
             reference_number: ref,
@@ -255,10 +279,20 @@ export async function POST(request: Request) {
             num_guests: Number(body.numGuests) || 1,
             total_amount: Number(body.totalAmount) || 0,
             booking_status: 'awaiting_confirmation',
-            payment_status: 'paid',
+            payment_status: 'awaiting_payment',
             special_requests: body.specialRequests || null,
+            // Receipt saved to Supabase Storage
+            receipt_url: receiptStorageUrl,
+            receipt_file_name: body.receiptFileName || null,
+            payment_method: body.paymentMethod || 'bank_transfer',
+            payment_reference: body.paymentReference || null,
+            amount_paid: Number(body.amountPaid) || 0,
+            balance_due: Number(body.balanceDue) || 0,
           });
         }
+
+        // Update the newBooking with the storage URL so local JSON also has it
+        newBooking.receiptImage = receiptStorageUrl;
       } catch (sbErr) {
         console.warn('Supabase booking sync warning:', sbErr);
       }
