@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import {
   RoomCategoryData, RoomUnit,
-  getStoredRoomsData, saveStoredRoomsData, mergeRoomsWithServer
+  getStoredRoomsData, saveStoredRoomsData, mergeRoomsWithServer, markPhotoAsDeleted
 } from '@/lib/hotel-data';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 import { RoomImageCarousel } from '@/components/rooms/RoomImageCarousel';
@@ -414,6 +414,11 @@ export default function AdminRoomsPage() {
       return;
     }
 
+    const photoToDelete = currentImgs[index];
+    if (photoToDelete) {
+      markPhotoAsDeleted(photoToDelete);
+    }
+
     const filtered = currentImgs.filter((_, i) => i !== index);
     const updatedRoom: RoomCategoryData = {
       ...editingRoom,
@@ -439,6 +444,12 @@ export default function AdminRoomsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedRoom),
       });
+
+      if (photoToDelete) {
+        await fetch(`/api/rooms?roomId=${encodeURIComponent(updatedRoom.slug)}&photoUrl=${encodeURIComponent(photoToDelete)}`, {
+          method: 'DELETE',
+        });
+      }
     } catch (err) {
       console.warn('Server room sync warning:', err);
     }

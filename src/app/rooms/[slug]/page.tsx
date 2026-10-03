@@ -150,6 +150,7 @@ export default async function RoomDetailPage({ params }: Props) {
                   images={room.images && room.images.length > 0 ? room.images : [room.image]}
                   fallbackImage={room.image}
                   roomName={room.name}
+                  roomSlug={room.slug}
                   facilities={room.facilities}
                   height="clamp(280px, 42vw, 440px)"
                   showThumbnails={true}

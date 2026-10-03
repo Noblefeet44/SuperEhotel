@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -144,9 +145,16 @@ export async function GET() {
           if (!match) return local;
 
           // Supabase photos are authoritative (admin uploads/deletions persist there)
-          const photos = (Array.isArray(match.photos) && match.photos.length > 0)
+          let photos = (Array.isArray(match.photos) && match.photos.length > 0)
             ? match.photos
             : (local.images && local.images.length > 0 ? local.images : [local.image]);
+
+          if (local.slug === 'deluxe-2') {
+            photos = photos.filter((img: string) => !img.includes('hotel-exterior.jpg'));
+            if (photos.length === 0) {
+              photos = ['/images/deluxe-2.jpg', '/images/deluxe-1.jpg'];
+            }
+          }
 
           const price = (match.price_per_night && Number(match.price_per_night) >= local.price * 0.7)
             ? Number(match.price_per_night)
@@ -300,13 +308,19 @@ export async function POST(request: Request) {
         }
 
         // 1. Update the exact slug row (admin-created rows)
-        await supabase.from('rooms').update(photoData).eq('slug', roomPayload.slug);
+        const res1 = await supabase.from('rooms').update(photoData).eq('slug', roomPayload.slug);
+        if (res1.error) console.warn('Supabase exact slug update warning:', res1.error.message);
 
         // 2. Also update the seed row which has a '-room' suffix slug
         //    e.g. 'standard' admin slug → 'standard-room' seed slug
-        await supabase.from('rooms').update(photoData).eq('slug', `${roomPayload.slug}-room`);
+        const res2 = await supabase.from('rooms').update(photoData).eq('slug', `${roomPayload.slug}-room`);
+        if (res2.error) console.warn('Supabase suffix slug update warning:', res2.error.message);
 
-        // 3. If neither row exists yet, insert a new one
+        // 3. Also update by name to catch any other seeded variation
+        const res3 = await supabase.from('rooms').update(photoData).ilike('name', roomPayload.name);
+        if (res3.error) console.warn('Supabase name update warning:', res3.error.message);
+
+        // 4. If neither row exists yet, insert a new one
         const { data: existingRows } = await supabase
           .from('rooms')
           .select('id')
@@ -322,6 +336,14 @@ export async function POST(request: Request) {
         console.warn('Supabase room update notice:', err);
       }
     }
+
+    try {
+      revalidatePath('/rooms');
+      revalidatePath('/rooms/[slug]', 'page');
+      revalidatePath(`/rooms/${roomPayload.slug}`);
+      revalidatePath('/');
+      revalidatePath('/admin/rooms');
+    } catch (_) {}
 
     return NextResponse.json({
       success: true,
@@ -414,13 +436,22 @@ export async function DELETE(request: Request) {
     if (supabase) {
       try {
         const photoPayload = { photos: updatedImages, updated_at: new Date().toISOString() };
-        // Update exact slug row AND the seed '-room' variant
+        // Update exact slug row, the seed '-room' variant, and by name
         await supabase.from('rooms').update(photoPayload).eq('slug', room.slug);
         await supabase.from('rooms').update(photoPayload).eq('slug', `${room.slug}-room`);
+        await supabase.from('rooms').update(photoPayload).ilike('name', room.name);
       } catch (err) {
         console.warn('Supabase delete photo notice:', err);
       }
     }
+
+    try {
+      revalidatePath('/rooms');
+      revalidatePath('/rooms/[slug]', 'page');
+      revalidatePath(`/rooms/${room.slug}`);
+      revalidatePath('/');
+      revalidatePath('/admin/rooms');
+    } catch (_) {}
 
     return NextResponse.json({
       success: true,

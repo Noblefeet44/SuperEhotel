@@ -35,12 +35,20 @@ function applySupabasePhotos(
     if (!match) return room;
 
     // Supabase `photos` column is the source of truth for images
-    const photos: string[] =
+    let photos: string[] =
       Array.isArray(match.photos) && match.photos.length > 0
         ? match.photos
         : room.images && room.images.length > 0
         ? room.images
         : [room.image];
+
+    // Specifically ensure hotel-exterior.jpg is never attached to deluxe-2
+    if (room.slug === 'deluxe-2') {
+      photos = photos.filter((img) => !img.includes('hotel-exterior.jpg'));
+      if (photos.length === 0) {
+        photos = ['/images/deluxe-2.jpg', '/images/deluxe-1.jpg'];
+      }
+    }
 
     const price =
       match.price_per_night && Number(match.price_per_night) >= room.price * 0.7

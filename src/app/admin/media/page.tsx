@@ -9,7 +9,7 @@ import {
   Camera, UploadCloud, CheckCircle2, Sparkles, Filter, ExternalLink
 } from 'lucide-react';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
-import { getStoredRoomsData, saveStoredRoomsData } from '@/lib/hotel-data';
+import { getStoredRoomsData, saveStoredRoomsData, markPhotoAsDeleted } from '@/lib/hotel-data';
 
 interface MediaItem {
   id: string;

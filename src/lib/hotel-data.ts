@@ -231,7 +231,6 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     images: [
       '/images/deluxe-2.jpg',
       '/images/deluxe-1.jpg',
-      '/images/hotel-exterior.jpg',
     ],
     description: 'Our highest Deluxe tier offering architectural elegance, velvet headboard, executive work station, city view, and luxury bath amenities.',
     facilities: ['Air Conditioning', 'Smart LED TV', 'High-Speed Wi-Fi', 'Rain Shower & Hot Water', 'Mini Bar Fridge', 'Executive Workspace', 'Bathrobes'],
@@ -338,11 +337,36 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
 ];
 
 const STORAGE_KEY = 'super_e_rooms_inventory_v4';
+const DELETED_PHOTOS_KEY = 'super_e_deleted_photos_v1';
+
+export function getDeletedPhotoUrls(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = localStorage.getItem(DELETED_PHOTOS_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markPhotoAsDeleted(url: string): void {
+  if (typeof window === 'undefined' || !url) return;
+  try {
+    const list = getDeletedPhotoUrls();
+    if (!list.includes(url)) {
+      list.push(url);
+      localStorage.setItem(DELETED_PHOTOS_KEY, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.error('Error recording deleted photo:', e);
+  }
+}
 
 export function getStoredRoomsData(): RoomCategoryData[] {
   if (typeof window === 'undefined') {
     return INITIAL_ROOMS_DATA;
   }
+  const deletedUrls = new Set(getDeletedPhotoUrls());
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) {
@@ -367,9 +391,18 @@ export function getStoredRoomsData(): RoomCategoryData[] {
         ? match.units
         : defaultRoom.units;
 
-      const images = (Array.isArray(match.images) && match.images.length > 0)
+      let rawImages = (Array.isArray(match.images) && match.images.length > 0)
         ? match.images
         : (defaultRoom.images || [match.image || defaultRoom.image]);
+
+      // Filter out permanently deleted photos
+      let images = rawImages.filter((img) => !deletedUrls.has(img));
+      if (defaultRoom.slug === 'deluxe-2') {
+        images = images.filter((img) => !img.includes('hotel-exterior.jpg'));
+      }
+      if (images.length === 0) {
+        images = defaultRoom.images || [defaultRoom.image];
+      }
 
       // Enforce official rate if stored rate is from old outdated seed (< 36000 for standard, < 47000 for deluxe, etc.)
       const price = (match.price && match.price >= defaultRoom.price * 0.7)
@@ -382,7 +415,7 @@ export function getStoredRoomsData(): RoomCategoryData[] {
         price,
         status: match.status || defaultRoom.status || 'available',
         images,
-        image: images[0] || match.image || defaultRoom.image,
+        image: images[0] || defaultRoom.image,
         units,
       };
     });
@@ -390,7 +423,14 @@ export function getStoredRoomsData(): RoomCategoryData[] {
     // Also include any user-created custom tiers not in default 8
     const customTiers = parsed.filter(
       (p) => !INITIAL_ROOMS_DATA.some((d) => d.id === p.id || d.slug === p.slug)
-    );
+    ).map((c) => {
+      const cleanImages = (c.images || [c.image]).filter((img) => !deletedUrls.has(img));
+      return {
+        ...c,
+        image: cleanImages[0] || c.image,
+        images: cleanImages.length > 0 ? cleanImages : [c.image],
+      };
+    });
 
     return [...enriched, ...customTiers];
   } catch (e) {
@@ -418,19 +458,14 @@ export function getRoomBySlug(slug: string): RoomCategoryData | undefined {
 
 /**
  * Merges server rooms with client local storage.
- * SERVER IS THE SOURCE OF TRUTH for images — uploaded photos and deletions
- * performed via the admin panel are saved to Supabase and must not be
- * reverted by stale localStorage cache.
- *
- * Rule: if the server has ANY photos stored (even defaults), prefer the server
- * images. Only fall back to localStorage images if the server returns an empty
- * photos array (which would mean Supabase has not yet been seeded).
+ * Permanently filters out any photos that have been deleted in the admin.
  */
 export function mergeRoomsWithServer(serverRooms: RoomCategoryData[]): RoomCategoryData[] {
   if (!Array.isArray(serverRooms) || serverRooms.length === 0) {
     return getStoredRoomsData();
   }
 
+  const deletedUrls = new Set(getDeletedPhotoUrls());
   const localRooms = getStoredRoomsData();
 
   const merged = localRooms.map((local) => {
@@ -441,22 +476,43 @@ export function mergeRoomsWithServer(serverRooms: RoomCategoryData[]): RoomCateg
       serverRooms.find((s) => s.slug === `${local.slug}-room`);
     if (!srv) return local;
 
-    const localImgs = local.images && local.images.length > 0 ? local.images : (local.image ? [local.image] : []);
-    const srvImgs = srv.images && srv.images.length > 0 ? srv.images : (srv.image ? [srv.image] : []);
+    // Filter both local and server images against deleted photos blacklist
+    let localImgs = (local.images && local.images.length > 0 ? local.images : (local.image ? [local.image] : []))
+      .filter((img) => !deletedUrls.has(img));
+    let srvImgs = (srv.images && srv.images.length > 0 ? srv.images : (srv.image ? [srv.image] : []))
+      .filter((img) => !deletedUrls.has(img));
 
-    // SERVER IS AUTHORITATIVE for images.
-    // Use server images whenever the server has a non-empty list.
-    // Only fall back to local if server returned nothing.
-    const finalImages = srvImgs.length > 0 ? srvImgs : localImgs;
+    // Specifically ensure hotel-exterior.jpg is never on deluxe-2
+    if (local.slug === 'deluxe-2' || srv.slug === 'deluxe-2') {
+      localImgs = localImgs.filter((img) => !img.includes('hotel-exterior.jpg'));
+      srvImgs = srvImgs.filter((img) => !img.includes('hotel-exterior.jpg'));
+    }
+
+    // Determine final photo list:
+    // If local has photos, check if user deleted any on this browser
+    let finalImages: string[];
+    if (localImgs.length > 0 && srvImgs.length > 0) {
+      // If local has fewer photos than server, local represents a deliberate user deletion!
+      // Otherwise combine or respect server's fresh additions
+      if (localImgs.length < srvImgs.length) {
+        finalImages = localImgs;
+      } else {
+        finalImages = srvImgs;
+      }
+    } else if (localImgs.length > 0) {
+      finalImages = localImgs;
+    } else if (srvImgs.length > 0) {
+      finalImages = srvImgs;
+    } else {
+      finalImages = ['/images/standard-room.jpg'];
+    }
 
     return {
       ...local,
       ...srv,
       image: finalImages[0] || local.image || srv.image,
       images: finalImages,
-      // Keep the most recent status (server wins for status too)
       status: srv.status || local.status || 'available',
-      // Keep local units if they exist (unit management is local-first)
       units: (local.units && local.units.length > 0) ? local.units : (srv.units || []),
     };
   });

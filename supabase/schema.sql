@@ -136,7 +136,7 @@ INSERT INTO rooms (category_id, name, slug, description, price_per_night, max_gu
     'King Bed (Signature)',
     '38 sqm',
     '["Air Conditioning", "Smart LED TV", "High-Speed Wi-Fi", "Rain Shower & Hot Water", "Mini Bar Fridge", "Executive Workspace", "Bathrobes"]'::jsonb,
-    '["/images/deluxe-2.jpg", "/images/deluxe-1.jpg", "/images/hotel-exterior.jpg"]'::jsonb,
+    '["/images/deluxe-2.jpg", "/images/deluxe-1.jpg"]'::jsonb,
     false,
     4
   ),
@@ -542,6 +542,24 @@ CREATE POLICY "Public read media bucket" ON storage.objects
 CREATE POLICY "Admin manage media bucket" ON storage.objects
   FOR ALL USING (bucket_id = 'media' AND auth.role() = 'authenticated');
 
+-- 3. Create Public Bucket for Room Photos
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'rooms',
+  'rooms',
+  true,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Storage Policies for 'rooms'
+CREATE POLICY "Public read rooms bucket" ON storage.objects
+  FOR SELECT USING (bucket_id = 'rooms');
+
+CREATE POLICY "Admin manage rooms bucket" ON storage.objects
+  FOR ALL USING (bucket_id = 'rooms' AND auth.role() = 'authenticated');
+
 -- =====================================================
 -- 14. SAFE MIGRATIONS FOR EXISTING DATABASES
 -- (Run this if you already created the tables before)
@@ -554,3 +572,4 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(12, 2);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS balance_due DECIMAL(12, 2);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_walk_in BOOLEAN DEFAULT false;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cashier_name TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS room_number TEXT;
