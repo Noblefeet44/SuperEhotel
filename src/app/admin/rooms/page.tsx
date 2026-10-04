@@ -80,6 +80,8 @@ export default function AdminRoomsPage() {
   const [newUnitStatus, setNewUnitStatus] = useState<{ [roomId: string]: RoomStatus }>({});
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [newCustomImageUrl, setNewCustomImageUrl] = useState('');
+  const [isSavingRoomDetails, setIsSavingRoomDetails] = useState(false);
+  const [isUpdatingGallery, setIsUpdatingGallery] = useState(false);
 
   const triggerSaveNotification = (msg: string = 'Changes saved successfully!') => {
     setSaveToast(msg);
@@ -88,6 +90,7 @@ export default function AdminRoomsPage() {
 
   // Helper to persist room updates immediately to React state, localStorage and server API
   const persistRoomChange = async (updatedRoom: RoomCategoryData) => {
+    setIsUpdatingGallery(true);
     setEditingRoom(updatedRoom);
     const exists = rooms.some((r) => r.id === updatedRoom.id || r.slug === updatedRoom.slug);
     const updatedRooms = exists
@@ -113,6 +116,8 @@ export default function AdminRoomsPage() {
       }
     } catch (err) {
       console.warn('Server room sync warning:', err);
+    } finally {
+      setIsUpdatingGallery(false);
     }
   };
 
@@ -438,13 +443,15 @@ export default function AdminRoomsPage() {
 
   // Save room category details (price, name, etc.)
   const handleSaveRoomDetails = async () => {
-    if (!editingRoom) return;
+    if (!editingRoom || isSavingRoomDetails) return;
 
     const trimmedName = (editingRoom.name || '').trim();
     if (!trimmedName) {
       alert('Please enter a room name / tier title.');
       return;
     }
+
+    setIsSavingRoomDetails(true);
 
     const cleanSlug = editingRoom.slug && !editingRoom.slug.startsWith('new-tier-')
       ? editingRoom.slug
@@ -505,6 +512,8 @@ export default function AdminRoomsPage() {
       }
     } catch (err) {
       console.warn('Server room save notice:', err);
+    } finally {
+      setIsSavingRoomDetails(false);
     }
 
     setIsModalOpen(false);
@@ -1641,9 +1650,35 @@ export default function AdminRoomsPage() {
 
                       {/* Photo Management Gallery */}
                       <div style={{ marginBottom: '0.6rem' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
-                          Manage Gallery Photos ({roomImages.length}):
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>
+                            Manage Gallery Photos ({roomImages.length}):
+                          </span>
+                          {isUpdatingGallery && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#D97706', fontWeight: 700 }}>
+                              <Loader2 size={12} className="animate-spin" /> Saving photo change...
+                            </span>
+                          )}
+                        </div>
+
+                        {isUpdatingGallery && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '0.35rem 0.6rem',
+                            borderRadius: '6px',
+                            backgroundColor: '#FEF3C7',
+                            border: '1px solid #FCD34D',
+                            color: '#92400E',
+                            fontSize: '0.73rem',
+                            fontWeight: 600,
+                            marginBottom: '0.45rem',
+                          }}>
+                            <Loader2 size={13} className="animate-spin" /> Saving photo updates live to server &amp; carousels...
+                          </div>
+                        )}
+
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(95px, 1fr))', gap: '0.5rem' }}>
                           {roomImages.map((imgUrl, idx) => (
                             <div
@@ -1656,6 +1691,7 @@ export default function AdminRoomsPage() {
                                 position: 'relative',
                                 display: 'flex',
                                 flexDirection: 'column',
+                                opacity: isUpdatingGallery ? 0.75 : 1,
                               }}
                             >
                               <div style={{ position: 'relative', width: '100%', height: '65px', backgroundColor: '#0F172A' }}>
@@ -1694,13 +1730,13 @@ export default function AdminRoomsPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleMovePhoto(idx, 'left')}
-                                    disabled={idx === 0}
+                                    disabled={idx === 0 || isUpdatingGallery}
                                     style={{
                                       background: 'none',
                                       border: 'none',
                                       padding: '2px',
-                                      cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                      opacity: idx === 0 ? 0.3 : 1,
+                                      cursor: (idx === 0 || isUpdatingGallery) ? 'not-allowed' : 'pointer',
+                                      opacity: (idx === 0 || isUpdatingGallery) ? 0.3 : 1,
                                       color: '#334155',
                                     }}
                                     title="Move earlier in carousel"
@@ -1710,13 +1746,13 @@ export default function AdminRoomsPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleMovePhoto(idx, 'right')}
-                                    disabled={idx === roomImages.length - 1}
+                                    disabled={idx === roomImages.length - 1 || isUpdatingGallery}
                                     style={{
                                       background: 'none',
                                       border: 'none',
                                       padding: '2px',
-                                      cursor: idx === roomImages.length - 1 ? 'not-allowed' : 'pointer',
-                                      opacity: idx === roomImages.length - 1 ? 0.3 : 1,
+                                      cursor: (idx === roomImages.length - 1 || isUpdatingGallery) ? 'not-allowed' : 'pointer',
+                                      opacity: (idx === roomImages.length - 1 || isUpdatingGallery) ? 0.3 : 1,
                                       color: '#334155',
                                     }}
                                     title="Move later in carousel"
@@ -1729,11 +1765,13 @@ export default function AdminRoomsPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleSetCoverPhoto(idx)}
+                                    disabled={isUpdatingGallery}
                                     style={{
                                       background: 'none',
                                       border: 'none',
                                       padding: '2px',
-                                      cursor: 'pointer',
+                                      cursor: isUpdatingGallery ? 'not-allowed' : 'pointer',
+                                      opacity: isUpdatingGallery ? 0.4 : 1,
                                       color: '#D97706',
                                       fontSize: '0.62rem',
                                       fontWeight: 700,
@@ -1747,11 +1785,13 @@ export default function AdminRoomsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDeletePhoto(idx)}
+                                  disabled={isUpdatingGallery}
                                   style={{
                                     background: 'none',
                                     border: 'none',
                                     padding: '2px',
-                                    cursor: 'pointer',
+                                    cursor: isUpdatingGallery ? 'not-allowed' : 'pointer',
+                                    opacity: isUpdatingGallery ? 0.4 : 1,
                                     color: '#DC2626',
                                   }}
                                   title="Remove photo"
@@ -1770,6 +1810,7 @@ export default function AdminRoomsPage() {
                           type="text"
                           placeholder="Or paste image URL / path..."
                           value={newCustomImageUrl}
+                          disabled={isUpdatingGallery}
                           onChange={(e) => setNewCustomImageUrl(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -1784,15 +1825,17 @@ export default function AdminRoomsPage() {
                             borderRadius: '6px',
                             fontSize: '0.75rem',
                             backgroundColor: '#FFFFFF',
+                            opacity: isUpdatingGallery ? 0.6 : 1,
                           }}
                         />
                         <button
                           type="button"
                           onClick={handleAddCustomImageUrl}
+                          disabled={isUpdatingGallery || !newCustomImageUrl.trim()}
                           className="btn btn-sm btn-secondary"
                           style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}
                         >
-                          <Plus size={12} /> Add URL
+                          {isUpdatingGallery ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add URL
                         </button>
                       </div>
                     </div>
@@ -1816,13 +1859,31 @@ export default function AdminRoomsPage() {
                   <button
                     type="button"
                     onClick={handleSaveRoomDetails}
+                    disabled={isSavingRoomDetails || isUpdatingGallery}
                     className="btn btn-primary"
-                    style={{ flex: 1, justifyContent: 'center' }}
+                    style={{
+                      flex: 1,
+                      justifyContent: 'center',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      opacity: (isSavingRoomDetails || isUpdatingGallery) ? 0.7 : 1,
+                      cursor: (isSavingRoomDetails || isUpdatingGallery) ? 'not-allowed' : 'pointer',
+                    }}
                   >
-                    <Save size={16} /> Save Changes
+                    {isSavingRoomDetails ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Saving Room &amp; Photos...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} /> Save Changes
+                      </>
+                    )}
                   </button>
                   <button
                     type="button"
+                    disabled={isSavingRoomDetails}
                     onClick={() => setIsModalOpen(false)}
                     className="btn btn-secondary"
                     style={{ flex: 1, justifyContent: 'center' }}

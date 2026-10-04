@@ -151,62 +151,7 @@ async function saveReceiptToStorage(
 
   let finalUrl = receiptDataOrUrl; // Base64 serves as fail-safe fallback
 
-  // 1. Try uploading to Supabase Storage Bucket ('receipts' or 'media')
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      // Ensure 'receipts' bucket exists
-      try {
-        const { data: bucketData } = await supabase.storage.getBucket('receipts');
-        if (!bucketData) {
-          await supabase.storage.createBucket('receipts', {
-            public: true,
-            fileSizeLimit: 10485760,
-          });
-        }
-      } catch {
-        // Proceed even if getBucket/createBucket throws (e.g. lack of direct RPC permission)
-      }
-
-      let targetBucket = 'receipts';
-      let targetPath = fileName;
-
-      let { data: uploadRes, error: uploadErr } = await supabase.storage
-        .from(targetBucket)
-        .upload(targetPath, buffer, {
-          contentType: mimeType,
-          upsert: true,
-        });
-
-      // If 'receipts' bucket failed, try 'media' bucket
-      if (uploadErr) {
-        console.warn('Failed upload to receipts bucket, trying media bucket:', uploadErr.message);
-        targetBucket = 'media';
-        targetPath = `receipts/${fileName}`;
-        const mediaUpload = await supabase.storage
-          .from(targetBucket)
-          .upload(targetPath, buffer, {
-            contentType: mimeType,
-            upsert: true,
-          });
-        uploadRes = mediaUpload.data;
-        uploadErr = mediaUpload.error;
-      }
-
-      if (!uploadErr && uploadRes?.path) {
-        const { data: publicUrlData } = supabase.storage
-          .from(targetBucket)
-          .getPublicUrl(uploadRes.path);
-        if (publicUrlData?.publicUrl) {
-          finalUrl = publicUrlData.publicUrl;
-        }
-      }
-    } catch (sbStorageErr) {
-      console.warn('Supabase storage upload error:', sbStorageErr);
-    }
-  }
-
-  // 2. Try saving to local filesystem public/uploads/receipts/
+  // 1. Save to local filesystem public/uploads/receipts/ immediately (< 5ms)
   try {
     const receiptsDir = path.join(process.cwd(), 'public', 'uploads', 'receipts');
     if (!fs.existsSync(receiptsDir)) {
@@ -214,28 +159,70 @@ async function saveReceiptToStorage(
     }
     const localFilePath = path.join(receiptsDir, fileName);
     fs.writeFileSync(localFilePath, buffer);
-    // If Supabase did not provide a public URL, use local URL
-    if (!finalUrl || finalUrl.startsWith('data:')) {
-      finalUrl = `/uploads/receipts/${fileName}`;
-    }
+    finalUrl = `/uploads/receipts/${fileName}`;
   } catch (fsErr) {
     console.warn('Local disk save notice (read-only):', fsErr);
   }
 
-  // 3. Register in Supabase 'media' table if connected
-  if (supabase && finalUrl && !finalUrl.startsWith('data:')) {
+  // 2. Upload to Supabase Storage Bucket ('receipts' or 'media') with strict 3.5s timeout
+  const supabase = getSupabase();
+  if (supabase) {
     try {
-      await supabase.from('media').insert({
-        file_name: fileName,
-        file_url: finalUrl,
-        file_type: mimeType.startsWith('image/') ? 'image' : 'document',
-        file_size: buffer.length,
-        alt_text: `Payment Receipt for Booking ${ref}`,
-        usage_context: 'receipt',
-      });
-    } catch {
-      // Ignore media table insert errors
+      const uploadFn = async () => {
+        let targetBucket = 'receipts';
+        let { data: uploadRes, error: uploadErr } = await supabase.storage
+          .from(targetBucket)
+          .upload(fileName, buffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
+
+        if (uploadErr) {
+          targetBucket = 'media';
+          const mediaUpload = await supabase.storage
+            .from(targetBucket)
+            .upload(`receipts/${fileName}`, buffer, {
+              contentType: mimeType,
+              upsert: true,
+            });
+          uploadRes = mediaUpload.data;
+          uploadErr = mediaUpload.error;
+        }
+
+        if (!uploadErr && uploadRes?.path) {
+          const { data: publicUrlData } = supabase.storage
+            .from(targetBucket)
+            .getPublicUrl(uploadRes.path);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        }
+        return null;
+      };
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 3500)
+      );
+
+      const remoteUrl = await Promise.race([uploadFn(), timeoutPromise]);
+      if (remoteUrl) {
+        finalUrl = remoteUrl;
+      }
+    } catch (sbStorageErr) {
+      console.warn('Supabase storage upload error:', sbStorageErr);
     }
+  }
+
+  // 3. Register in Supabase 'media' table if connected (non-blocking)
+  if (supabase && finalUrl && !finalUrl.startsWith('data:')) {
+    supabase.from('media').insert({
+      file_name: fileName,
+      file_url: finalUrl,
+      file_type: mimeType.startsWith('image/') ? 'image' : 'document',
+      file_size: buffer.length,
+      alt_text: `Payment Receipt for Booking ${ref}`,
+      usage_context: 'receipt',
+    }).catch(() => {});
   }
 
   return { receiptUrl: finalUrl, fileName };
@@ -412,98 +399,77 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Sync to Supabase
+    // 1. Save to local JSON backup immediately (< 5ms response guarantee)
+    const bookings = ensureDataFile();
+    bookings.unshift(newBooking);
+    saveBookings(bookings);
+
+    // 2. Sync to Supabase with strict timeout so user isn't kept waiting
     const supabase = getSupabase();
     if (supabase) {
-      try {
-        // Insert or find guest
-        let guestId: string | null = null;
-        const { data: existingGuests } = await supabase
-          .from('guests')
-          .select('id')
-          .eq('phone', body.phone)
-          .limit(1);
-
-        if (existingGuests && existingGuests.length > 0) {
-          guestId = existingGuests[0].id;
-        } else {
-          const { data: newGuest } = await supabase
+      const syncToSupabase = async () => {
+        try {
+          // Insert or find guest
+          let guestId: string | null = null;
+          const { data: existingGuests } = await supabase
             .from('guests')
-            .insert({
-              full_name: body.guestName,
-              phone: body.phone,
-              whatsapp: body.whatsapp || body.phone,
-              email: body.email || null,
-            })
             .select('id')
-            .single();
-
-          if (newGuest) guestId = newGuest.id;
-        }
-
-        // Find matching room
-        let roomId: string | null = null;
-        if (body.roomSlug) {
-          const { data: slugMatched } = await supabase
-            .from('rooms')
-            .select('id')
-            .eq('slug', body.roomSlug)
+            .eq('phone', body.phone)
             .limit(1);
-          if (slugMatched && slugMatched.length > 0) {
-            roomId = slugMatched[0].id;
-          }
-        }
-        if (!roomId && body.roomSlug) {
-          const { data: suffixedMatched } = await supabase
-            .from('rooms')
-            .select('id')
-            .eq('slug', `${body.roomSlug}-room`)
-            .limit(1);
-          if (suffixedMatched && suffixedMatched.length > 0) {
-            roomId = suffixedMatched[0].id;
-          }
-        }
-        if (!roomId) {
-          const { data: nameMatched } = await supabase
-            .from('rooms')
-            .select('id')
-            .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
-            .limit(1);
-          if (nameMatched && nameMatched.length > 0) {
-            roomId = nameMatched[0].id;
-          }
-        }
 
-        // Insert booking into Supabase
-        if (guestId && roomId) {
-          const fullPayload: any = {
-            reference_number: ref,
-            guest_id: guestId,
-            room_id: roomId,
-            check_in_date: body.checkIn,
-            check_out_date: body.checkOut,
-            num_guests: Number(body.numGuests) || 1,
-            total_amount: totalAmt,
-            booking_status: newBooking.status,
-            payment_status: newBooking.paymentStatus,
-            special_requests: body.specialRequests || null,
-            admin_notes: body.adminNotes || null,
-            assigned_room_number: body.roomNumber || null,
-            receipt_url: receiptUrl,
-            receipt_file_name: receiptFileName,
-            payment_method: newBooking.paymentMethod,
-            payment_reference: body.paymentReference || null,
-            amount_paid: amtPaid,
-            balance_due: balDue,
-            is_walk_in: Boolean(body.isWalkIn),
-            cashier_name: body.cashierName || null,
-          };
+          if (existingGuests && existingGuests.length > 0) {
+            guestId = existingGuests[0].id;
+          } else {
+            const { data: newGuest } = await supabase
+              .from('guests')
+              .insert({
+                full_name: body.guestName,
+                phone: body.phone,
+                whatsapp: body.whatsapp || body.phone,
+                email: body.email || null,
+              })
+              .select('id')
+              .single();
 
-          const { error: insErr } = await supabase.from('bookings').insert(fullPayload);
-          if (insErr) {
-            console.warn('Full booking insert warning (retrying basic payload):', insErr.message);
-            // Fallback for pre-migration schema
-            await supabase.from('bookings').insert({
+            if (newGuest) guestId = newGuest.id;
+          }
+
+          // Find matching room
+          let roomId: string | null = null;
+          if (body.roomSlug) {
+            const { data: slugMatched } = await supabase
+              .from('rooms')
+              .select('id')
+              .eq('slug', body.roomSlug)
+              .limit(1);
+            if (slugMatched && slugMatched.length > 0) {
+              roomId = slugMatched[0].id;
+            }
+          }
+          if (!roomId && body.roomSlug) {
+            const { data: suffixedMatched } = await supabase
+              .from('rooms')
+              .select('id')
+              .eq('slug', `${body.roomSlug}-room`)
+              .limit(1);
+            if (suffixedMatched && suffixedMatched.length > 0) {
+              roomId = suffixedMatched[0].id;
+            }
+          }
+          if (!roomId) {
+            const { data: nameMatched } = await supabase
+              .from('rooms')
+              .select('id')
+              .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
+              .limit(1);
+            if (nameMatched && nameMatched.length > 0) {
+              roomId = nameMatched[0].id;
+            }
+          }
+
+          // Insert booking into Supabase
+          if (guestId && roomId) {
+            const fullPayload: any = {
               reference_number: ref,
               guest_id: guestId,
               room_id: roomId,
@@ -514,18 +480,44 @@ export async function POST(request: Request) {
               booking_status: newBooking.status,
               payment_status: newBooking.paymentStatus,
               special_requests: body.specialRequests || null,
-            });
-          }
-        }
-      } catch (sbErr) {
-        console.warn('Supabase booking sync warning:', sbErr);
-      }
-    }
+              admin_notes: body.adminNotes || null,
+              assigned_room_number: body.roomNumber || null,
+              receipt_url: receiptUrl,
+              receipt_file_name: receiptFileName,
+              payment_method: newBooking.paymentMethod,
+              payment_reference: body.paymentReference || null,
+              amount_paid: amtPaid,
+              balance_due: balDue,
+              is_walk_in: Boolean(body.isWalkIn),
+              cashier_name: body.cashierName || null,
+            };
 
-    // 2. Save to local JSON backup
-    const bookings = ensureDataFile();
-    bookings.unshift(newBooking);
-    saveBookings(bookings);
+            const { error: insErr } = await supabase.from('bookings').insert(fullPayload);
+            if (insErr) {
+              console.warn('Full booking insert warning (retrying basic payload):', insErr.message);
+              // Fallback for pre-migration schema
+              await supabase.from('bookings').insert({
+                reference_number: ref,
+                guest_id: guestId,
+                room_id: roomId,
+                check_in_date: body.checkIn,
+                check_out_date: body.checkOut,
+                num_guests: Number(body.numGuests) || 1,
+                total_amount: totalAmt,
+                booking_status: newBooking.status,
+                payment_status: newBooking.paymentStatus,
+                special_requests: body.specialRequests || null,
+              });
+            }
+          }
+        } catch (sbErr) {
+          console.warn('Supabase booking sync warning:', sbErr);
+        }
+      };
+
+      const syncTimeout = new Promise((resolve) => setTimeout(resolve, 3500));
+      await Promise.race([syncToSupabase(), syncTimeout]);
+    }
 
     return NextResponse.json({
       success: true,

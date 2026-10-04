@@ -7,7 +7,7 @@ import {
   Sparkles, ArrowLeft, Plus, Edit2, Trash2, Check,
   Calendar, Clock, Users, Phone, MessageCircle,
   CheckCircle2, XCircle, AlertCircle, Save, X, Search,
-  CalendarCheck, Tag, Filter, MapPin
+  CalendarCheck, Tag, Filter, MapPin, Loader2
 } from 'lucide-react';
 import { formatPrice, generateWhatsAppURL } from '@/lib/utils';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
@@ -117,6 +117,16 @@ export default function AdminHallPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<HallPackage | null>(null);
 
+  // Loading & toast states
+  const [isSavingBooking, setIsSavingBooking] = useState(false);
+  const [isSavingPackage, setIsSavingPackage] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  const triggerSaveNotification = (msg: string) => {
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
+
   // New Booking Form State
   const [newBooking, setNewBooking] = useState({
     fullName: '',
@@ -183,62 +193,70 @@ export default function AdminHallPage() {
   const handleStatusChange = (id: string, newStatus: HallBooking['status']) => {
     const updated = bookings.map((b) => (b.id === id ? { ...b, status: newStatus } : b));
     saveBookingsList(updated);
+    triggerSaveNotification(`Reservation marked as ${newStatus}`);
   };
 
   const handleDeleteBooking = (id: string) => {
     if (confirm('Are you sure you want to delete this hall booking record?')) {
       const updated = bookings.filter((b) => b.id !== id);
       saveBookingsList(updated);
+      triggerSaveNotification('Reservation deleted');
     }
   };
 
   const handleAddBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBooking.fullName.trim() || !newBooking.phone.trim() || !newBooking.eventDate) {
+    if (!newBooking.fullName.trim() || !newBooking.phone.trim() || !newBooking.eventDate || isSavingBooking) {
       alert('Please fill in client name, phone number, and event date.');
       return;
     }
 
-    const ref = `SE-HALL-${Math.floor(1000 + Math.random() * 9000)}`;
-    const pkg = packages.find((p) => p.id === newBooking.packageId) || packages[1];
+    setIsSavingBooking(true);
+    try {
+      const ref = `SE-HALL-${Math.floor(1000 + Math.random() * 9000)}`;
+      const pkg = packages.find((p) => p.id === newBooking.packageId) || packages[1];
 
-    const record: HallBooking = {
-      id: ref,
-      createdAt: new Date().toISOString(),
-      fullName: newBooking.fullName.trim(),
-      phone: newBooking.phone.trim(),
-      whatsapp: newBooking.whatsapp.trim() || newBooking.phone.trim(),
-      email: newBooking.email.trim(),
-      eventType: newBooking.eventType,
-      eventDate: newBooking.eventDate,
-      timeSlot: newBooking.timeSlot,
-      guestCount: newBooking.guestCount,
-      packageId: pkg.id,
-      packageName: pkg.name,
-      packagePrice: pkg.price,
-      addons: ['Standard Hall Facilities'],
-      specialNotes: newBooking.specialNotes.trim(),
-      status: newBooking.status,
-      depositPaid: Number(newBooking.depositPaid) || 0,
-    };
+      const record: HallBooking = {
+        id: ref,
+        createdAt: new Date().toISOString(),
+        fullName: newBooking.fullName.trim(),
+        phone: newBooking.phone.trim(),
+        whatsapp: newBooking.whatsapp.trim() || newBooking.phone.trim(),
+        email: newBooking.email.trim(),
+        eventType: newBooking.eventType,
+        eventDate: newBooking.eventDate,
+        timeSlot: newBooking.timeSlot,
+        guestCount: newBooking.guestCount,
+        packageId: pkg.id,
+        packageName: pkg.name,
+        packagePrice: pkg.price,
+        addons: ['Standard Hall Facilities'],
+        specialNotes: newBooking.specialNotes.trim(),
+        status: newBooking.status,
+        depositPaid: Number(newBooking.depositPaid) || 0,
+      };
 
-    saveBookingsList([record, ...bookings]);
-    setIsAddModalOpen(false);
-    setNewBooking({
-      fullName: '',
-      phone: '',
-      whatsapp: '',
-      email: '',
-      eventType: 'Wedding Reception',
-      eventDate: '',
-      timeSlot: 'Full Day (8:00 AM – 8:00 PM)',
-      guestCount: '200 – 300 Guests',
-      packageId: 'full-day-wedding',
-      packagePrice: 280000,
-      depositPaid: 0,
-      specialNotes: '',
-      status: 'confirmed',
-    });
+      saveBookingsList([record, ...bookings]);
+      setIsAddModalOpen(false);
+      triggerSaveNotification(`Reservation for ${record.fullName} created!`);
+      setNewBooking({
+        fullName: '',
+        phone: '',
+        whatsapp: '',
+        email: '',
+        eventType: 'Wedding Reception',
+        eventDate: '',
+        timeSlot: 'Full Day (8:00 AM – 8:00 PM)',
+        guestCount: '200 – 300 Guests',
+        packageId: 'full-day-wedding',
+        packagePrice: 280000,
+        depositPaid: 0,
+        specialNotes: '',
+        status: 'confirmed',
+      });
+    } finally {
+      setIsSavingBooking(false);
+    }
   };
 
   // Filtered bookings
@@ -877,11 +895,23 @@ export default function AdminHallPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddModalOpen(false)}>
+                <button type="button" disabled={isSavingBooking} className="btn btn-secondary" onClick={() => setIsAddModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Save size={16} /> Save Reservation
+                <button
+                  type="submit"
+                  disabled={isSavingBooking}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: isSavingBooking ? 0.7 : 1,
+                    cursor: isSavingBooking ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isSavingBooking ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isSavingBooking ? 'Saving...' : 'Save Reservation'}
                 </button>
               </div>
             </form>
@@ -1002,15 +1032,53 @@ export default function AdminHallPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingPackage(null)}>
+                <button type="button" disabled={isSavingPackage} className="btn btn-secondary" onClick={() => setEditingPackage(null)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Save size={16} /> Save Changes
+                <button
+                  type="submit"
+                  disabled={isSavingPackage}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: isSavingPackage ? 0.7 : 1,
+                    cursor: isSavingPackage ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isSavingPackage ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isSavingPackage ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Floating Save Toast Notification */}
+      {saveToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '75px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#0F172A',
+            color: '#FFFFFF',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '9999px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+          }}
+        >
+          <CheckCircle2 size={16} color="#10B981" />
+          <span>{saveToast}</span>
         </div>
       )}
     </div>

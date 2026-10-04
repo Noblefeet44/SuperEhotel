@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Image as ImageIcon, ArrowLeft, Upload, Trash2, Copy, Check,
-  Camera, UploadCloud, CheckCircle2, Sparkles, Filter, ExternalLink
+  Camera, UploadCloud, CheckCircle2, Sparkles, Filter, ExternalLink, Loader2
 } from 'lucide-react';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 import { getStoredRoomsData, saveStoredRoomsData, markPhotoAsDeleted } from '@/lib/hotel-data';
@@ -51,6 +51,7 @@ export default function AdminMediaPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploadCategory, setUploadCategory] = useState('Rooms');
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -141,48 +142,53 @@ export default function AdminMediaPage() {
       return;
     }
 
-    const updatedMedia = mediaList.filter((m) => m.id !== id);
-    setMediaList(updatedMedia);
+    setIsDeletingId(id);
     try {
-      localStorage.setItem('super_e_media_library_v2', JSON.stringify(updatedMedia));
-    } catch (e) {
-      console.error(e);
-    }
-
-    // Also remove from any room categories that might use this image url
-    try {
-      const storedRooms = getStoredRoomsData();
-      let anyRoomChanged = false;
-      const updatedRooms = storedRooms.map((room) => {
-        const hasUrlInImages = room.images && room.images.includes(itemToDelete.url);
-        const hasUrlAsCover = room.image === itemToDelete.url;
-
-        if (hasUrlInImages || hasUrlAsCover) {
-          anyRoomChanged = true;
-          const filteredImages = (room.images || [room.image]).filter((img) => img !== itemToDelete.url);
-          const finalImages = filteredImages.length > 0 ? filteredImages : ['/images/standard-room.jpg'];
-          return {
-            ...room,
-            image: finalImages[0],
-            images: finalImages,
-          };
-        }
-        return room;
-      });
-
-      if (anyRoomChanged) {
-        saveStoredRoomsData(updatedRooms);
-        fetch('/api/rooms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_all', rooms: updatedRooms }),
-        }).catch((err) => console.warn('Failed to sync updated rooms:', err));
+      const updatedMedia = mediaList.filter((m) => m.id !== id);
+      setMediaList(updatedMedia);
+      try {
+        localStorage.setItem('super_e_media_library_v2', JSON.stringify(updatedMedia));
+      } catch (e) {
+        console.error(e);
       }
-    } catch (err) {
-      console.warn('Error removing deleted media from rooms:', err);
-    }
 
-    showToast('Photo permanently deleted and removed from carousels');
+      // Also remove from any room categories that might use this image url
+      try {
+        const storedRooms = getStoredRoomsData();
+        let anyRoomChanged = false;
+        const updatedRooms = storedRooms.map((room) => {
+          const hasUrlInImages = room.images && room.images.includes(itemToDelete.url);
+          const hasUrlAsCover = room.image === itemToDelete.url;
+
+          if (hasUrlInImages || hasUrlAsCover) {
+            anyRoomChanged = true;
+            const filteredImages = (room.images || [room.image]).filter((img) => img !== itemToDelete.url);
+            const finalImages = filteredImages.length > 0 ? filteredImages : ['/images/standard-room.jpg'];
+            return {
+              ...room,
+              image: finalImages[0],
+              images: finalImages,
+            };
+          }
+          return room;
+        });
+
+        if (anyRoomChanged) {
+          saveStoredRoomsData(updatedRooms);
+          await fetch('/api/rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save_all', rooms: updatedRooms }),
+          }).catch((err) => console.warn('Failed to sync updated rooms:', err));
+        }
+      } catch (err) {
+        console.warn('Error removing deleted media from rooms:', err);
+      }
+
+      showToast('Photo permanently deleted and removed from carousels');
+    } finally {
+      setIsDeletingId(null);
+    }
   };
 
   const filteredMedia =
@@ -480,11 +486,17 @@ export default function AdminMediaPage() {
 
                   <button
                     onClick={() => deleteItem(item.id)}
+                    disabled={isDeletingId === item.id}
                     className="btn btn-ghost btn-sm"
-                    style={{ padding: '0.35rem', color: 'var(--color-destructive)' }}
+                    style={{
+                      padding: '0.35rem',
+                      color: 'var(--color-destructive)',
+                      opacity: isDeletingId === item.id ? 0.5 : 1,
+                      cursor: isDeletingId === item.id ? 'not-allowed' : 'pointer',
+                    }}
                     title="Remove"
                   >
-                    <Trash2 size={14} />
+                    {isDeletingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
                 </div>
               </div>

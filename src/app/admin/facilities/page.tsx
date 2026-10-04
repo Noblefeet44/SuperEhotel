@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Building2, ArrowLeft, Plus, Edit, Trash2, Save, X, ToggleLeft, ToggleRight, Check } from 'lucide-react';
+import { Building2, ArrowLeft, Plus, Edit, Trash2, Save, X, ToggleLeft, ToggleRight, Check, Loader2 } from 'lucide-react';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 
 const initialFacilities = [
@@ -23,13 +23,49 @@ export default function AdminFacilitiesPage() {
   const router = useRouter();
   const [facilities, setFacilities] = useState(initialFacilities);
   const [editingFacility, setEditingFacility] = useState<typeof initialFacilities[0] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_authenticated') !== 'true') router.push('/admin/login');
+    try {
+      const stored = localStorage.getItem('super_e_facilities');
+      if (stored) {
+        setFacilities(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to load facilities:', e);
+    }
   }, [router]);
 
+  const persistFacilities = (updated: typeof initialFacilities, msg: string) => {
+    setFacilities(updated);
+    try {
+      localStorage.setItem('super_e_facilities', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save facilities:', e);
+    }
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
   const toggleEnabled = (id: string) => {
-    setFacilities(facilities.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)));
+    if (isSaving) return;
+    const updated = facilities.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f));
+    persistFacilities(updated, 'Facility visibility toggled!');
+  };
+
+  const handleSaveModal = async () => {
+    if (!editingFacility || !editingFacility.name.trim() || isSaving) return;
+    setIsSaving(true);
+    await new Promise((r) => setTimeout(r, 350));
+    const exists = facilities.find((f) => f.id === editingFacility.id);
+    const updated = exists
+      ? facilities.map((f) => (f.id === editingFacility.id ? editingFacility : f))
+      : [...facilities, editingFacility];
+    persistFacilities(updated, 'Facility details saved successfully!');
+    setIsSaving(false);
+    setEditingFacility(null);
   };
 
   return (
@@ -142,7 +178,10 @@ export default function AdminFacilitiesPage() {
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm('Delete this facility?')) setFacilities(facilities.filter((x) => x.id !== f.id));
+                      if (confirm('Delete this facility?')) {
+                        const updated = facilities.filter((x) => x.id !== f.id);
+                        persistFacilities(updated, 'Facility removed.');
+                      }
                     }}
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--color-destructive)', padding: '0.3rem' }}
@@ -193,7 +232,10 @@ export default function AdminFacilitiesPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm('Delete?')) setFacilities(facilities.filter((x) => x.id !== f.id));
+                          if (confirm('Delete?')) {
+                            const updated = facilities.filter((x) => x.id !== f.id);
+                            persistFacilities(updated, 'Facility removed.');
+                          }
                         }}
                         className="btn btn-ghost btn-sm"
                         style={{ color: 'var(--color-destructive)' }}
@@ -211,7 +253,7 @@ export default function AdminFacilitiesPage() {
         {/* Edit Modal */}
         {editingFacility && (
           <>
-            <div className="mobile-menu-overlay" onClick={() => setEditingFacility(null)} />
+            <div className="mobile-menu-overlay" onClick={() => !isSaving && setEditingFacility(null)} />
             <div
               style={{
                 position: 'fixed',
@@ -230,7 +272,7 @@ export default function AdminFacilitiesPage() {
                 <h3 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 800 }}>
                   {editingFacility.name ? 'Edit Facility' : 'Add Facility'}
                 </h3>
-                <button onClick={() => setEditingFacility(null)} className="btn btn-ghost btn-icon">
+                <button disabled={isSaving} onClick={() => setEditingFacility(null)} className="btn btn-ghost btn-icon">
                   <X size={20} />
                 </button>
               </div>
@@ -241,6 +283,7 @@ export default function AdminFacilitiesPage() {
                   </label>
                   <input
                     className="input"
+                    disabled={isSaving}
                     value={editingFacility.name}
                     onChange={(e) => setEditingFacility({ ...editingFacility, name: e.target.value })}
                   />
@@ -252,34 +295,60 @@ export default function AdminFacilitiesPage() {
                   <textarea
                     className="input"
                     rows={3}
+                    disabled={isSaving}
                     value={editingFacility.description}
                     onChange={(e) => setEditingFacility({ ...editingFacility, description: e.target.value })}
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                  <button onClick={() => setEditingFacility(null)} className="btn btn-ghost">
+                  <button disabled={isSaving} onClick={() => setEditingFacility(null)} className="btn btn-ghost">
                     Cancel
                   </button>
                   <button
-                    onClick={() => {
-                      if (editingFacility.name) {
-                        setFacilities((prev) => {
-                          const exists = prev.find((f) => f.id === editingFacility.id);
-                          return exists
-                            ? prev.map((f) => (f.id === editingFacility.id ? editingFacility : f))
-                            : [...prev, editingFacility];
-                        });
-                        setEditingFacility(null);
-                      }
-                    }}
+                    disabled={isSaving || !editingFacility.name.trim()}
+                    onClick={handleSaveModal}
                     className="btn btn-primary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      opacity: isSaving ? 0.7 : 1,
+                      cursor: isSaving ? 'not-allowed' : 'pointer'
+                    }}
                   >
-                    <Save size={16} /> Save
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {isSaving ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </div>
             </div>
           </>
+        )}
+
+        {/* Save Toast Notification */}
+        {saveToast && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '1.5rem',
+              right: '1.5rem',
+              backgroundColor: '#10B981',
+              color: '#FFFFFF',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '10px',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              animation: 'fadeIn 0.2s ease-in-out',
+            }}
+          >
+            <Check size={18} />
+            {saveToast}
+          </div>
         )}
       </main>
     </div>

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Utensils, ArrowLeft, Plus, Edit, Trash2, Save, X, Star,
   ToggleLeft, ToggleRight, CheckCircle2, Sparkles, Wine,
-  Search, Filter
+  Search, Filter, Loader2
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
@@ -45,11 +45,21 @@ export default function AdminRestaurantPage() {
   const [selectedFoodCategory, setSelectedFoodCategory] = useState('all');
   const [editingFoodItem, setEditingFoodItem] = useState<typeof initialFoodItems[0] | null>(null);
 
-  // Drinks state (from official price boards)
+  // Drinks state
   const [drinks, setDrinks] = useState<DrinkItem[]>([]);
-  const [selectedDrinkCategory, setSelectedDrinkCategory] = useState<string>('all');
+  const [selectedDrinkCategory, setSelectedDrinkCategory] = useState<DrinkCategoryKey | 'all'>('all');
   const [drinkSearchQuery, setDrinkSearchQuery] = useState('');
   const [editingDrink, setEditingDrink] = useState<DrinkItem | null>(null);
+
+  // Loading & toast states
+  const [isSavingFood, setIsSavingFood] = useState(false);
+  const [isSavingDrink, setIsSavingDrink] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  const triggerSaveNotification = (msg: string) => {
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(null), 2500);
+  };
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_authenticated') !== 'true') {
@@ -90,20 +100,28 @@ export default function AdminRestaurantPage() {
     if (confirm('Delete this menu item?')) {
       const updated = foodItems.filter((i) => i.id !== id);
       saveFoodItemsList(updated);
+      triggerSaveNotification('Menu item removed');
     }
   };
 
   const handleSaveFoodModal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingFoodItem) return;
-    const exists = foodItems.some((i) => i.id === editingFoodItem.id);
-    if (exists) {
-      const updated = foodItems.map((i) => (i.id === editingFoodItem.id ? editingFoodItem : i));
-      saveFoodItemsList(updated);
-    } else {
-      saveFoodItemsList([editingFoodItem, ...foodItems]);
+    if (!editingFoodItem || isSavingFood) return;
+    setIsSavingFood(true);
+    try {
+      const exists = foodItems.some((i) => i.id === editingFoodItem.id);
+      if (exists) {
+        const updated = foodItems.map((i) => (i.id === editingFoodItem.id ? editingFoodItem : i));
+        saveFoodItemsList(updated);
+        triggerSaveNotification(`"${editingFoodItem.name}" updated!`);
+      } else {
+        saveFoodItemsList([editingFoodItem, ...foodItems]);
+        triggerSaveNotification(`"${editingFoodItem.name}" added to menu!`);
+      }
+      setEditingFoodItem(null);
+    } finally {
+      setIsSavingFood(false);
     }
-    setEditingFoodItem(null);
   };
 
   // Drinks methods
@@ -121,20 +139,28 @@ export default function AdminRestaurantPage() {
     if (confirm('Remove this beverage from the drinks catalog?')) {
       const updated = drinks.filter((d) => d.id !== id);
       saveDrinksList(updated);
+      triggerSaveNotification('Beverage removed');
     }
   };
 
   const handleSaveDrinkModal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingDrink) return;
-    const exists = drinks.some((d) => d.id === editingDrink.id);
-    if (exists) {
-      const updated = drinks.map((d) => (d.id === editingDrink.id ? editingDrink : d));
-      saveDrinksList(updated);
-    } else {
-      saveDrinksList([editingDrink, ...drinks]);
+    if (!editingDrink || isSavingDrink) return;
+    setIsSavingDrink(true);
+    try {
+      const exists = drinks.some((d) => d.id === editingDrink.id);
+      if (exists) {
+        const updated = drinks.map((d) => (d.id === editingDrink.id ? editingDrink : d));
+        saveDrinksList(updated);
+        triggerSaveNotification(`"${editingDrink.name}" updated!`);
+      } else {
+        saveDrinksList([editingDrink, ...drinks]);
+        triggerSaveNotification(`"${editingDrink.name}" added to beverage menu!`);
+      }
+      setEditingDrink(null);
+    } finally {
+      setIsSavingDrink(false);
     }
-    setEditingDrink(null);
   };
 
   // Filters
@@ -724,9 +750,21 @@ export default function AdminRestaurantPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingFoodItem(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Save size={16} /> Save Dish
+                <button type="button" disabled={isSavingFood} className="btn btn-secondary" onClick={() => setEditingFoodItem(null)}>Cancel</button>
+                <button
+                  type="submit"
+                  disabled={isSavingFood}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: isSavingFood ? 0.7 : 1,
+                    cursor: isSavingFood ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isSavingFood ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isSavingFood ? 'Saving...' : 'Save Dish'}
                 </button>
               </div>
             </form>
@@ -833,13 +871,51 @@ export default function AdminRestaurantPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingDrink(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Save size={16} /> Save Beverage
+                <button type="button" disabled={isSavingDrink} className="btn btn-secondary" onClick={() => setEditingDrink(null)}>Cancel</button>
+                <button
+                  type="submit"
+                  disabled={isSavingDrink}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: isSavingDrink ? 0.7 : 1,
+                    cursor: isSavingDrink ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isSavingDrink ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isSavingDrink ? 'Saving...' : 'Save Beverage'}
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Floating Save Toast Notification */}
+      {saveToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '75px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#0F172A',
+            color: '#FFFFFF',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '9999px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+          }}
+        >
+          <CheckCircle2 size={16} color="#10B981" />
+          <span>{saveToast}</span>
         </div>
       )}
     </div>

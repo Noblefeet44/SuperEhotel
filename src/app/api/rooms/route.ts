@@ -58,7 +58,7 @@ async function fetchCloudRooms(): Promise<RoomCategoryData[] | null> {
   try {
     const downloadPromise = supabase.storage.from('app-data').download('rooms.json');
     const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-      setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2500)
+      setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 1000)
     );
     const result: any = await Promise.race([downloadPromise, timeoutPromise]);
     if (result && result.data && typeof result.data.text === 'function') {
@@ -75,7 +75,7 @@ async function fetchCloudRooms(): Promise<RoomCategoryData[] | null> {
 }
 
 function readLocalDiskRooms(): RoomCategoryData[] {
-  // 1. Check in-memory cache
+  // 1. Check in-memory cache (< 0.1ms)
   if (serverMemoryRooms && serverMemoryRooms.length > 0) {
     return serverMemoryRooms;
   }
@@ -115,11 +115,21 @@ function readLocalDiskRooms(): RoomCategoryData[] {
 }
 
 async function ensureRoomsFile(): Promise<RoomCategoryData[]> {
-  // 1. Try cloud storage first for multi-device live sync
+  // 1. Fast path: return in-memory cache immediately if already warmed (< 0.1ms)
+  if (serverMemoryRooms && serverMemoryRooms.length > 0) {
+    return serverMemoryRooms;
+  }
+
+  // 2. Check local disk fallback (< 1ms)
+  const diskRooms = readLocalDiskRooms();
+  if (diskRooms && diskRooms.length > 0 && diskRooms !== INITIAL_ROOMS_DATA) {
+    return diskRooms;
+  }
+
+  // 3. Try cloud storage with quick 1s timeout
   const cloudRooms = await fetchCloudRooms();
   if (cloudRooms && cloudRooms.length > 0) {
     serverMemoryRooms = cloudRooms;
-    // Keep local cache synced
     try {
       fs.writeFileSync(TMP_FILE, JSON.stringify(cloudRooms, null, 2), 'utf8');
       if (fs.existsSync(DATA_DIR)) {
@@ -129,7 +139,7 @@ async function ensureRoomsFile(): Promise<RoomCategoryData[]> {
     return cloudRooms;
   }
 
-  return readLocalDiskRooms();
+  return diskRooms;
 }
 
 async function saveRooms(rooms: RoomCategoryData[]): Promise<boolean> {
@@ -303,20 +313,14 @@ export async function POST(request: Request) {
           (photoData as any).is_featured = Boolean(isFeatured);
         }
 
-        // 1. Update the exact slug row (admin-created rows)
-        const res1 = await supabase.from('rooms').update(photoData).eq('slug', roomPayload.slug);
-        if (res1.error) console.warn('Supabase exact slug update warning:', res1.error.message);
+        // Run updates concurrently to eliminate sequential network round-trips
+        await Promise.allSettled([
+          supabase.from('rooms').update(photoData).eq('slug', roomPayload.slug),
+          supabase.from('rooms').update(photoData).eq('slug', `${roomPayload.slug}-room`),
+          supabase.from('rooms').update(photoData).ilike('name', roomPayload.name),
+        ]);
 
-        // 2. Also update the seed row which has a '-room' suffix slug
-        //    e.g. 'standard' admin slug → 'standard-room' seed slug
-        const res2 = await supabase.from('rooms').update(photoData).eq('slug', `${roomPayload.slug}-room`);
-        if (res2.error) console.warn('Supabase suffix slug update warning:', res2.error.message);
-
-        // 3. Also update by name to catch any other seeded variation
-        const res3 = await supabase.from('rooms').update(photoData).ilike('name', roomPayload.name);
-        if (res3.error) console.warn('Supabase name update warning:', res3.error.message);
-
-        // 4. If neither row exists yet, insert a new one
+        // If neither row exists yet, insert a new one
         const { data: existingRows } = await supabase
           .from('rooms')
           .select('id')

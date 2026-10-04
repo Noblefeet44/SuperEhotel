@@ -84,6 +84,8 @@ function BookPageContent() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOptimizingReceipt, setIsOptimizingReceipt] = useState(false);
+  const [submissionStage, setSubmissionStage] = useState<'idle' | 'securing' | 'receipt' | 'whatsapp'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load active rooms from local inventory and live server API
@@ -151,6 +153,7 @@ function BookPageContent() {
       }
       setReceiptFile(file);
       setErrors((prev) => ({ ...prev, receipt: undefined }));
+      setIsOptimizingReceipt(true);
 
       // If it's an image, optimize/compress via canvas for fast upload & maximum clarity
       if (file.type.startsWith('image/')) {
@@ -158,7 +161,7 @@ function BookPageContent() {
         reader.onload = (event) => {
           const img = new window.Image();
           img.onload = () => {
-            const MAX_DIM = 1600;
+            const MAX_DIM = 1000;
             let width = img.width;
             let height = img.height;
             if (width > height) {
@@ -178,14 +181,16 @@ function BookPageContent() {
             const ctx = canvas.getContext('2d');
             if (ctx) {
               ctx.drawImage(img, 0, 0, width, height);
-              const compressedData = canvas.toDataURL('image/jpeg', 0.86);
+              const compressedData = canvas.toDataURL('image/jpeg', 0.72);
               setReceiptPreview(compressedData);
             } else {
               setReceiptPreview(event.target?.result as string);
             }
+            setIsOptimizingReceipt(false);
           };
           img.onerror = () => {
             setReceiptPreview(event.target?.result as string);
+            setIsOptimizingReceipt(false);
           };
           img.src = event.target?.result as string;
         };
@@ -194,6 +199,7 @@ function BookPageContent() {
         const reader = new FileReader();
         reader.onload = (event) => {
           setReceiptPreview(event.target?.result as string);
+          setIsOptimizingReceipt(false);
         };
         reader.readAsDataURL(file);
       }
@@ -283,6 +289,7 @@ function BookPageContent() {
     }
 
     setIsSubmitting(true);
+    setSubmissionStage('securing');
     const ref = bookingRef || generateBookingReference();
 
     const bookingPayload = {
@@ -311,6 +318,7 @@ function BookPageContent() {
 
     // 1. Save to backend API
     try {
+      setSubmissionStage('receipt');
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -333,6 +341,7 @@ function BookPageContent() {
       console.warn('Could not store to localStorage:', e);
     }
 
+    setSubmissionStage('whatsapp');
     setIsSubmitting(false);
     setIsConfirmed(true);
     setStep(5);
@@ -1320,6 +1329,24 @@ function BookPageContent() {
                   id="receipt-file-input"
                 />
 
+                {isOptimizingReceipt && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '0.75rem 1rem',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: '#FEF3C7',
+                    border: '1px solid #FCD34D',
+                    color: '#92400E',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    marginBottom: 'var(--space-md)',
+                  }}>
+                    <RefreshCw size={16} className="animate-spin" /> Optimizing payment receipt image for rapid submission...
+                  </div>
+                )}
+
                 {!receiptPreview ? (
                   /* Empty Upload Dropzone */
                   <label
@@ -1334,7 +1361,7 @@ function BookPageContent() {
                       borderRadius: 'var(--radius-lg)',
                       border: '2px dashed var(--color-border)',
                       backgroundColor: 'var(--color-background)',
-                      cursor: 'pointer',
+                      cursor: isOptimizingReceipt ? 'wait' : 'pointer',
                       transition: 'all 0.2s ease',
                       textAlign: 'center',
                     }}
@@ -1358,7 +1385,7 @@ function BookPageContent() {
                         Click here to upload payment screenshot
                       </strong>
                       <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.825rem', color: 'var(--color-text-muted)' }}>
-                        Supports PNG, JPG, JPEG, WEBP (Max 10MB)
+                        Supports PNG, JPG, JPEG, WEBP (Max 15MB, compressed automatically)
                       </p>
                     </div>
                   </label>
@@ -1388,16 +1415,18 @@ function BookPageContent() {
                       <button
                         type="button"
                         onClick={handleRemoveReceipt}
+                        disabled={isSubmitting}
                         style={{
                           background: 'none',
                           border: 'none',
                           color: 'var(--color-destructive)',
                           fontSize: '0.85rem',
                           fontWeight: 600,
-                          cursor: 'pointer',
+                          cursor: isSubmitting ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '0.25rem',
+                          opacity: isSubmitting ? 0.5 : 1,
                         }}
                       >
                         <X size={16} /> Remove
@@ -1442,7 +1471,8 @@ function BookPageContent() {
                             background: '#FFFFFF',
                             fontSize: '0.8rem',
                             fontWeight: 600,
-                            cursor: 'pointer',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                            opacity: isSubmitting ? 0.5 : 1,
                           }}
                         >
                           <RefreshCw size={14} /> Replace File
@@ -1453,9 +1483,39 @@ function BookPageContent() {
                 )}
               </div>
 
+              {/* LIVE MULTI-STEP SUBMISSION PROGRESS BANNER */}
+              {isSubmitting && (
+                <div style={{
+                  padding: '1rem 1.25rem',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #1E3A8A 0%, #172554 100%)',
+                  color: '#FFFFFF',
+                  marginBottom: 'var(--space-lg)',
+                  boxShadow: '0 6px 20px rgba(30, 58, 138, 0.25)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.35rem' }}>
+                    <RefreshCw size={18} className="animate-spin" style={{ color: '#F59E0B' }} />
+                    <strong style={{ fontSize: '0.95rem', letterSpacing: '0.2px' }}>
+                      {submissionStage === 'securing' && 'Step 1/3: Reserving room & locking dates...'}
+                      {submissionStage === 'receipt' && 'Step 2/3: Securing payment transfer receipt...'}
+                      {submissionStage === 'whatsapp' && 'Step 3/3: Opening hotel WhatsApp reservation desk...'}
+                    </strong>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.85)' }}>
+                    Please hold on — our reservation desk is locking in your room. Please do not refresh or click back.
+                  </p>
+                </div>
+              )}
+
               {/* ACTION BUTTONS */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
-                <button type="button" onClick={prevStep} className="btn btn-ghost">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  disabled={isSubmitting}
+                  className="btn btn-ghost"
+                  style={{ opacity: isSubmitting ? 0.5 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+                >
                   <ArrowLeft size={18} /> Back
                 </button>
                 <button
@@ -1470,12 +1530,19 @@ function BookPageContent() {
                     justifyContent: 'center',
                     gap: '0.5rem',
                     fontSize: '1rem',
+                    opacity: isSubmitting ? 0.75 : 1,
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                   }}
                 >
                   {isSubmitting ? (
                     <>
                       <RefreshCw size={18} className="animate-spin" />
-                      <span>Saving &amp; Processing...</span>
+                      <span>
+                        {submissionStage === 'securing' && 'Reserving Room...'}
+                        {submissionStage === 'receipt' && 'Securing Receipt...'}
+                        {submissionStage === 'whatsapp' && 'Connecting to WhatsApp...'}
+                        {submissionStage === 'idle' && 'Saving & Processing...'}
+                      </span>
                     </>
                   ) : (
                     <>

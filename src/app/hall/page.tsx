@@ -7,7 +7,7 @@ import {
   Calendar, Clock, Users, Zap, Snowflake, Mic, Shield,
   Car, Utensils, Sparkles, Check, ArrowRight, Phone,
   MessageCircle, HelpCircle, ChevronDown, CheckCircle2,
-  CalendarCheck, Award, MapPin
+  CalendarCheck, Award, MapPin, Loader2
 } from 'lucide-react';
 import {
   HALL_INFO, HALL_AMENITIES, HALL_LAYOUTS,
@@ -36,6 +36,7 @@ export default function HallPage() {
   ]);
 
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingRef, setBookingRef] = useState('');
 
   const toggleAddon = (addon: string) => {
@@ -54,11 +55,13 @@ export default function HallPage() {
 
   const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!fullName.trim() || !phone.trim() || !eventDate) {
       alert('Please fill in your name, contact phone, and desired event date.');
       return;
     }
 
+    setIsSubmitting(true);
     const ref = `SE-HALL-${Math.floor(1000 + Math.random() * 9000)}`;
     setBookingRef(ref);
 
@@ -889,6 +892,7 @@ ${specialNotes.trim() || 'None'}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="btn btn-accent btn-lg"
                     style={{
                       width: '100%',
@@ -900,10 +904,21 @@ ${specialNotes.trim() || 'None'}
                       fontSize: '1.05rem',
                       padding: '1rem',
                       boxShadow: '0 8px 25px rgba(217, 119, 6, 0.35)',
+                      opacity: isSubmitting ? 0.75 : 1,
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer'
                     }}
                   >
-                    <MessageCircle size={20} />
-                    Send Reservation Inquiry via WhatsApp
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        Preparing Inquiry &amp; Opening WhatsApp...
+                      </>
+                    ) : (
+                      <>
+                        <MessageCircle size={20} />
+                        Send Reservation Inquiry via WhatsApp
+                      </>
+                    )}
                   </button>
                   <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B', textAlign: 'center' }}>
                     🔒 We do not charge online payment immediately. An event coordinator will confirm date lock upon physical inspection or bank transfer deposit.

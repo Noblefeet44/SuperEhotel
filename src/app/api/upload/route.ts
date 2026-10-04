@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
           });
 
         const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: new Error('Supabase storage upload timeout') }), 25000)
+          setTimeout(() => resolve({ data: null, error: new Error('Supabase storage upload timeout') }), 4000)
         );
 
         const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
