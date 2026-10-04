@@ -5,14 +5,14 @@
     "name": "Standard Room",
     "category": "Standard",
     "price": 36000,
+    "status": "available",
     "maxGuests": 2,
     "bedType": "Queen Bed",
     "roomSize": "25 sqm",
-    "image": "/images/standard-room.jpg",
+    "image": "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105653628_IMG-20261002-WA0019.jpg",
     "images": [
-      "/images/standard-room.jpg",
-      "/images/hotel-lobby.jpg",
-      "/images/hotel-exterior.jpg"
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105653628_IMG-20261002-WA0019.jpg",
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791112653093_Super_E__bedrooms_7.jpeg"
     ],
     "description": "Our Standard Room offers a comfortable retreat with premium bedding, climate control, and essential amenities. Ideal for business travellers and couples.",
     "facilities": [
@@ -49,8 +49,7 @@
         "floor": "1st Floor",
         "status": "available"
       }
-    ],
-    "status": "available"
+    ]
   },
   {
     "id": "deluxe",
@@ -65,7 +64,8 @@
     "images": [
       "/images/deluxe-room.jpg",
       "/images/deluxe-1.jpg",
-      "/images/hotel-lobby.jpg"
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105735421_IMG-20261002-WA0055.jpg",
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105737223_IMG-20261002-WA0044.jpg"
     ],
     "description": "Spacious Deluxe room featuring sophisticated finishes, plush king bedding, tea/coffee maker, and enhanced lounging space.",
     "facilities": [
@@ -112,8 +112,7 @@
     "image": "/images/deluxe-1.jpg",
     "images": [
       "/images/deluxe-1.jpg",
-      "/images/deluxe-room.jpg",
-      "/images/room-rates-board.jpg"
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105865925_IMG-20261002-WA0037.jpg"
     ],
     "description": "Upgraded Deluxe tier with premium walnut accents, ambient mood lighting, vanity mirror, and soundproofed windows for tranquil rest.",
     "facilities": [
@@ -202,7 +201,7 @@
     "images": [
       "/images/luxury-room.jpg",
       "/images/deluxe-2.jpg",
-      "/images/hotel-lobby.jpg"
+      "https://abiavsgmbokwyxlahhyt.supabase.co/storage/v1/object/public/rooms/rooms_1791105923224_IMG-20261002-WA0055.jpg"
     ],
     "description": "An exceptional blend of style and comfort. Features rich coral blush padded headboard with diagonal gold chevron accents, custom origami bird lamps, and premium toiletries.",
     "facilities": [
@@ -333,9 +332,7 @@
     "image": "/images/presidential-suite.jpg",
     "images": [
       "/images/presidential-suite.jpg",
-      "/images/vip-suite.jpg",
-      "/images/hotel-lobby.jpg",
-      "/images/hotel-front-drone.jpg"
+      "/images/vip-suite.jpg"
     ],
     "description": "The crowning jewel of Super E Luxury Hotel. Expansive master suite featuring private living salon with sofa lounge and coffee table, tall cream & gold headboard, luxury dining area, and 24/7 dedicated butler service.",
     "facilities": [

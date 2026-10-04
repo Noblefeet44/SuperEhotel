@@ -8,104 +8,13 @@ import {
   MessageCircle, Check, X, ArrowLeft, Phone, Clock,
   CreditCard, CheckCircle2, AlertCircle, FileText, Image as ImageIcon,
   ExternalLink, UserCheck, ShieldCheck, UserPlus, Receipt,
-  Printer, Share2, Wallet, Banknote, Building, Bed
+  Printer, Share2, Wallet, Banknote, Building, Bed, Trash2, Loader2
 } from 'lucide-react';
 import { formatPrice, formatDate, generateWhatsAppURL } from '@/lib/utils';
 import { HOTEL_INFO, INITIAL_ROOMS_DATA } from '@/lib/hotel-data';
 import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
 
-const allBookings = [
-  {
-    id: '1',
-    ref: 'SE-20260811-4521',
-    guest: 'Amina Bello',
-    phone: '08023456789',
-    whatsapp: '08023456789',
-    email: 'amina@email.com',
-    room: 'Deluxe Room',
-    checkIn: '2026-08-12',
-    checkOut: '2026-08-14',
-    guests: 2,
-    status: 'new',
-    payment: 'not_paid',
-    amount: 80000,
-    specialRequests: 'Late check-in, around 9pm',
-    adminNotes: '',
-    createdAt: '2026-08-11T14:30:00',
-  },
-  {
-    id: '2',
-    ref: 'SE-20260810-7834',
-    guest: 'Chidi Okeke',
-    phone: '07031234567',
-    whatsapp: '07031234567',
-    email: '',
-    room: 'Executive Room',
-    checkIn: '2026-08-11',
-    checkOut: '2026-08-13',
-    guests: 1,
-    status: 'confirmed',
-    payment: 'paid',
-    amount: 120000,
-    specialRequests: '',
-    adminNotes: 'Business guest, needs early check-in',
-    createdAt: '2026-08-10T10:15:00',
-  },
-  {
-    id: '3',
-    ref: 'SE-20260809-2156',
-    guest: 'Fatima Abdullahi',
-    phone: '08098765432',
-    whatsapp: '08098765432',
-    email: 'fatima@email.com',
-    room: 'VIP Luxury Suite',
-    checkIn: '2026-08-10',
-    checkOut: '2026-08-12',
-    guests: 3,
-    status: 'checked_in',
-    payment: 'paid',
-    amount: 200000,
-    specialRequests: 'Extra towels and pillows',
-    adminNotes: 'VIP guest, suite 101',
-    createdAt: '2026-08-09T08:45:00',
-  },
-  {
-    id: '4',
-    ref: 'SE-20260808-9362',
-    guest: 'Emmanuel Nwosu',
-    phone: '09045678901',
-    whatsapp: '09045678901',
-    email: 'emma@email.com',
-    room: 'Standard Room',
-    checkIn: '2026-08-08',
-    checkOut: '2026-08-10',
-    guests: 1,
-    status: 'checked_out',
-    payment: 'paid',
-    amount: 50000,
-    specialRequests: '',
-    adminNotes: '',
-    createdAt: '2026-08-07T16:20:00',
-  },
-  {
-    id: '5',
-    ref: 'SE-20260811-6743',
-    guest: 'Grace Obi',
-    phone: '08112233445',
-    whatsapp: '08112233445',
-    email: '',
-    room: 'Standard Room',
-    checkIn: '2026-08-15',
-    checkOut: '2026-08-17',
-    guests: 2,
-    status: 'awaiting_confirmation',
-    payment: 'not_paid',
-    amount: 50000,
-    specialRequests: 'Ground floor preferred',
-    adminNotes: '',
-    createdAt: '2026-08-11T09:00:00',
-  },
-];
+const allBookings: any[] = [];
 
 const statusFilters = [
   { value: 'all', label: 'All' },
@@ -181,17 +90,20 @@ interface AdminBookingItem {
 
 export default function AdminBookingsPage() {
   const router = useRouter();
+  const [viewTab, setViewTab] = useState<'bookings' | 'receipts'>('bookings');
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [viewTab, setViewTab] = useState<'bookings' | 'receipts'>('bookings');
-  const [bookingsList, setBookingsList] = useState<AdminBookingItem[]>(allBookings);
+  const [bookingsList, setBookingsList] = useState<AdminBookingItem[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
   const [receiptModalImage, setReceiptModalImage] = useState<string | null>(null);
   const [modalStatus, setModalStatus] = useState<string>('confirmed');
   const [modalPayment, setModalPayment] = useState<string>('paid');
   const [modalNotes, setModalNotes] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearingAll, setIsClearingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [saveToast, setSaveToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string>('Saved successfully!');
 
   // Front Desk Walk-In State
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
@@ -410,7 +322,7 @@ export default function AdminBookingsPage() {
       try {
         const res = await fetch('/api/bookings');
         const data = await res.json();
-        if (data.success && Array.isArray(data.bookings) && data.bookings.length > 0) {
+        if (data.success && Array.isArray(data.bookings)) {
           const mapped: AdminBookingItem[] = data.bookings.map((b: any) => ({
             id: b.id,
             ref: b.ref,
@@ -439,16 +351,57 @@ export default function AdminBookingsPage() {
             createdAt: b.createdAt || new Date().toISOString(),
           }));
 
-          const liveRefs = new Set(mapped.map((m) => m.ref));
-          const remainingMock = allBookings.filter((mb) => !liveRefs.has(mb.ref));
-          setBookingsList([...mapped, ...remainingMock]);
+          setBookingsList(mapped);
+        } else {
+          setBookingsList([]);
         }
       } catch (err) {
         console.warn('Live bookings fallback:', err);
+        setBookingsList([]);
       }
     }
     fetchLiveBookings();
   }, []);
+
+  const handleDeleteBooking = async (booking: AdminBookingItem) => {
+    if (!confirm(`Delete booking ${booking.ref} (${booking.guest})?`)) return;
+    setDeletingId(booking.id);
+    try {
+      await fetch(`/api/bookings?id=${encodeURIComponent(booking.id)}&ref=${encodeURIComponent(booking.ref)}`, {
+        method: 'DELETE',
+      });
+      setBookingsList((prev) => prev.filter((b) => b.id !== booking.id && b.ref !== booking.ref));
+      if (selectedBooking?.id === booking.id) setSelectedBooking(null);
+      setToastMessage('Booking deleted successfully');
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2200);
+    } catch (err) {
+      console.error('Delete booking error:', err);
+      alert('Failed to delete booking.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAllBookings = async () => {
+    if (!confirm('⚠️ Are you sure you want to remove ALL existing bookings from the database and start fresh?')) return;
+    setIsClearingAll(true);
+    try {
+      await fetch('/api/bookings?clearAll=true', {
+        method: 'DELETE',
+      });
+      setBookingsList([]);
+      setSelectedBooking(null);
+      setToastMessage('All existing bookings cleared!');
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2500);
+    } catch (err) {
+      console.error('Clear all error:', err);
+      alert('Failed to clear bookings.');
+    } finally {
+      setIsClearingAll(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedBooking) {
@@ -683,6 +636,28 @@ export default function AdminBookingsPage() {
               }}
             >
               <UserPlus size={16} /> + Walk-In
+            </button>
+            <button
+              onClick={handleClearAllBookings}
+              type="button"
+              disabled={isClearingAll || bookingsList.length === 0}
+              className="btn"
+              style={{
+                backgroundColor: '#FEE2E2',
+                color: '#DC2626',
+                borderColor: '#FCA5A5',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.8rem',
+                cursor: bookingsList.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: bookingsList.length === 0 ? 0.6 : 1,
+              }}
+              title="Wipe all existing/old bookings so new bookings start fresh"
+            >
+              {isClearingAll ? <Loader2 size={15} className="spin-animation" /> : <Trash2 size={15} />}
+              <span>Clear All Bookings</span>
             </button>
           </div>
         </div>
@@ -1322,6 +1297,26 @@ export default function AdminBookingsPage() {
                   >
                     Manage
                   </button>
+
+                  <button
+                    onClick={() => handleDeleteBooking(booking)}
+                    type="button"
+                    disabled={deletingId === booking.id}
+                    className="btn btn-sm"
+                    style={{
+                      backgroundColor: '#FEF2F2',
+                      color: '#DC2626',
+                      border: '1px solid #FECACA',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      padding: '0.45rem 0.6rem',
+                      borderRadius: '8px',
+                      boxSizing: 'border-box',
+                    }}
+                    title="Delete booking"
+                  >
+                    {deletingId === booking.id ? <Loader2 size={13} className="spin-animation" /> : <Trash2 size={13} />}
+                  </button>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.35rem', paddingTop: '0.35rem', borderTop: '1px solid #F1F5F9', width: '100%', boxSizing: 'border-box' }}>
@@ -1535,10 +1530,30 @@ export default function AdminBookingsPage() {
                       >
                         <MessageCircle size={16} style={{ color: 'var(--color-whatsapp-dark)' }} />
                       </a>
+                      <button
+                        onClick={() => handleDeleteBooking(booking)}
+                        disabled={deletingId === booking.id}
+                        className="btn btn-ghost btn-sm"
+                        title="Delete Booking"
+                        style={{ color: '#DC2626' }}
+                      >
+                        {deletingId === booking.id ? <Loader2 size={15} className="spin-animation" /> : <Trash2 size={15} />}
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {filteredBookings.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748B' }}>
+                    <CalendarCheck size={36} style={{ margin: '0 auto 0.5rem', opacity: 0.35 }} />
+                    <div style={{ fontWeight: 700, color: '#1E293B', fontSize: '1rem' }}>No Bookings in System</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      Ready for new guest reservations or front desk walk-ins!
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -2613,6 +2628,32 @@ export default function AdminBookingsPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* Notification Toast */}
+        {saveToast && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              right: '24px',
+              backgroundColor: '#1E293B',
+              color: '#FFFFFF',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '10px',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              zIndex: 99999,
+              animation: 'fadeIn 0.2s ease-in-out',
+            }}
+          >
+            <CheckCircle2 size={18} style={{ color: '#4ADE80' }} />
+            <span>{toastMessage}</span>
+          </div>
         )}
 
         {/* Global Print Stylesheet for Receipt */}

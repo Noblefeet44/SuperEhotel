@@ -241,7 +241,14 @@ export async function GET() {
         .select('*, guests(*), rooms(*)')
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && Array.isArray(data)) {
+        if (data.length === 0) {
+          // If Supabase has zero bookings, it means the database was reset / has no bookings.
+          // Clear local bookings as well so old test bookings never reappear!
+          saveBookings([]);
+          return NextResponse.json({ success: true, bookings: [] });
+        }
+
         // Query files from 'receipts' bucket to correlate any receipt by reference
         const bucketReceiptMap = new Map<string, string>();
         try {
@@ -267,11 +274,6 @@ export async function GET() {
             (l) => l.ref === b.reference_number || l.id === b.id
           );
 
-          // Priority for receipt image:
-          // 1. Direct receipt_url from Supabase row
-          // 2. Receipt image from localBookings matching ref
-          // 3. Receipt found directly in 'receipts' storage bucket matching ref
-          // 4. Fallback receipt_image
           const receiptImg =
             b.receipt_url ||
             localMatch?.receiptImage ||
@@ -288,12 +290,12 @@ export async function GET() {
           return {
             id: b.id,
             ref: b.reference_number,
-            guestName: b.guests?.full_name || localMatch?.guestName || 'Guest',
-            phone: b.guests?.phone || localMatch?.phone || '',
-            whatsapp: b.guests?.whatsapp || b.guests?.phone || localMatch?.whatsapp || '',
-            email: b.guests?.email || localMatch?.email || '',
-            roomName: b.rooms?.name || localMatch?.roomName || 'Hotel Room',
-            roomSlug: b.rooms?.slug || localMatch?.roomSlug || '',
+            guestName: b.guest_name || b.guests?.full_name || localMatch?.guestName || 'Guest',
+            phone: b.guest_phone || b.guests?.phone || localMatch?.phone || '',
+            whatsapp: b.guest_whatsapp || b.guests?.whatsapp || b.guests?.phone || localMatch?.whatsapp || '',
+            email: b.guest_email || b.guests?.email || localMatch?.email || '',
+            roomName: b.room_name || b.rooms?.name || localMatch?.roomName || 'Hotel Room',
+            roomSlug: b.room_slug || b.rooms?.slug || localMatch?.roomSlug || '',
             checkIn: b.check_in_date || localMatch?.checkIn,
             checkOut: b.check_out_date || localMatch?.checkOut,
             nights: b.total_nights || localMatch?.nights || 1,
@@ -406,75 +408,116 @@ export async function POST(request: Request) {
     bookings.unshift(newBooking);
     saveBookings(bookings);
 
-    // 2. Sync to Supabase with strict timeout so user isn't kept waiting
+    // 2. Sync to Supabase with resilient fallbacks
     const supabase = getSupabase();
     if (supabase) {
       const syncToSupabase = async () => {
         try {
           // Insert or find guest
           let guestId: string | null = null;
-          const { data: existingGuests } = await supabase
-            .from('guests')
-            .select('id')
-            .eq('phone', body.phone)
-            .limit(1);
-
-          if (existingGuests && existingGuests.length > 0) {
-            guestId = existingGuests[0].id;
-          } else {
-            const { data: newGuest } = await supabase
+          try {
+            const { data: existingGuests } = await supabase
               .from('guests')
-              .insert({
-                full_name: body.guestName,
-                phone: body.phone,
-                whatsapp: body.whatsapp || body.phone,
-                email: body.email || null,
-              })
               .select('id')
-              .single();
+              .eq('phone', body.phone)
+              .limit(1);
 
-            if (newGuest) guestId = newGuest.id;
+            if (existingGuests && existingGuests.length > 0) {
+              guestId = existingGuests[0].id;
+            } else {
+              const { data: newGuest } = await supabase
+                .from('guests')
+                .insert({
+                  full_name: body.guestName,
+                  phone: body.phone,
+                  whatsapp: body.whatsapp || body.phone,
+                  email: body.email || null,
+                })
+                .select('id')
+                .single();
+
+              if (newGuest) guestId = newGuest.id;
+            }
+          } catch (gErr) {
+            console.warn('Guest lookup/create warning (will proceed):', gErr);
           }
 
           // Find matching room
           let roomId: string | null = null;
-          if (body.roomSlug) {
-            const { data: slugMatched } = await supabase
-              .from('rooms')
-              .select('id')
-              .eq('slug', body.roomSlug)
-              .limit(1);
-            if (slugMatched && slugMatched.length > 0) {
-              roomId = slugMatched[0].id;
+          try {
+            if (body.roomSlug) {
+              const { data: slugMatched } = await supabase
+                .from('rooms')
+                .select('id')
+                .eq('slug', body.roomSlug)
+                .limit(1);
+              if (slugMatched && slugMatched.length > 0) {
+                roomId = slugMatched[0].id;
+              }
             }
-          }
-          if (!roomId && body.roomSlug) {
-            const { data: suffixedMatched } = await supabase
-              .from('rooms')
-              .select('id')
-              .eq('slug', `${body.roomSlug}-room`)
-              .limit(1);
-            if (suffixedMatched && suffixedMatched.length > 0) {
-              roomId = suffixedMatched[0].id;
+            if (!roomId && body.roomSlug) {
+              const { data: suffixedMatched } = await supabase
+                .from('rooms')
+                .select('id')
+                .eq('slug', `${body.roomSlug}-room`)
+                .limit(1);
+              if (suffixedMatched && suffixedMatched.length > 0) {
+                roomId = suffixedMatched[0].id;
+              }
             }
-          }
-          if (!roomId) {
-            const { data: nameMatched } = await supabase
-              .from('rooms')
-              .select('id')
-              .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
-              .limit(1);
-            if (nameMatched && nameMatched.length > 0) {
-              roomId = nameMatched[0].id;
+            if (!roomId) {
+              const { data: nameMatched } = await supabase
+                .from('rooms')
+                .select('id')
+                .ilike('name', `%${(body.roomName || '').replace(/[%_]/g, '')}%`)
+                .limit(1);
+              if (nameMatched && nameMatched.length > 0) {
+                roomId = nameMatched[0].id;
+              }
             }
+          } catch (rErr) {
+            console.warn('Room lookup warning (will proceed):', rErr);
           }
 
-          // Insert booking into Supabase
-          if (guestId && roomId) {
-            const fullPayload: any = {
+          // Insert booking into Supabase (with direct guest and room text fallbacks)
+          const fullPayload: any = {
+            reference_number: ref,
+            guest_id: guestId || null,
+            room_id: roomId || null,
+            check_in_date: body.checkIn,
+            check_out_date: body.checkOut,
+            num_guests: Number(body.numGuests) || 1,
+            total_amount: totalAmt,
+            booking_status: newBooking.status,
+            payment_status: newBooking.paymentStatus,
+            special_requests: body.specialRequests || null,
+            admin_notes: body.adminNotes || null,
+            assigned_room_number: body.roomNumber || null,
+            receipt_url: receiptUrl,
+            receipt_file_name: receiptFileName,
+            payment_method: newBooking.paymentMethod,
+            payment_reference: body.paymentReference || null,
+            amount_paid: amtPaid,
+            balance_due: balDue,
+            is_walk_in: Boolean(body.isWalkIn),
+            cashier_name: body.cashierName || null,
+            room_number: body.roomNumber || null,
+            guest_name: body.guestName,
+            guest_phone: body.phone,
+            guest_whatsapp: body.whatsapp || body.phone,
+            guest_email: body.email || null,
+            room_name: body.roomName,
+            room_slug: body.roomSlug || null,
+          };
+
+          const { error: insErr } = await supabase.from('bookings').insert(fullPayload);
+          if (insErr) {
+            console.warn('Full booking insert warning (retrying basic payload):', insErr.message);
+            // Fallback for pre-migration schema
+            await supabase.from('bookings').insert({
               reference_number: ref,
-              guest_id: guestId,
-              room_id: roomId,
+              guest_id: guestId || undefined,
+              room_id: roomId || undefined,
               check_in_date: body.checkIn,
               check_out_date: body.checkOut,
               num_guests: Number(body.numGuests) || 1,
@@ -482,35 +525,7 @@ export async function POST(request: Request) {
               booking_status: newBooking.status,
               payment_status: newBooking.paymentStatus,
               special_requests: body.specialRequests || null,
-              admin_notes: body.adminNotes || null,
-              assigned_room_number: body.roomNumber || null,
-              receipt_url: receiptUrl,
-              receipt_file_name: receiptFileName,
-              payment_method: newBooking.paymentMethod,
-              payment_reference: body.paymentReference || null,
-              amount_paid: amtPaid,
-              balance_due: balDue,
-              is_walk_in: Boolean(body.isWalkIn),
-              cashier_name: body.cashierName || null,
-            };
-
-            const { error: insErr } = await supabase.from('bookings').insert(fullPayload);
-            if (insErr) {
-              console.warn('Full booking insert warning (retrying basic payload):', insErr.message);
-              // Fallback for pre-migration schema
-              await supabase.from('bookings').insert({
-                reference_number: ref,
-                guest_id: guestId,
-                room_id: roomId,
-                check_in_date: body.checkIn,
-                check_out_date: body.checkOut,
-                num_guests: Number(body.numGuests) || 1,
-                total_amount: totalAmt,
-                booking_status: newBooking.status,
-                payment_status: newBooking.paymentStatus,
-                special_requests: body.specialRequests || null,
-              });
-            }
+            });
           }
         } catch (sbErr) {
           console.warn('Supabase booking sync warning:', sbErr);
@@ -587,5 +602,53 @@ export async function PATCH(request: NextRequest) {
       { success: false, error: error.message || 'Failed to update booking' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const clearAll = searchParams.get('clearAll') === 'true';
+    const id = searchParams.get('id');
+    const ref = searchParams.get('ref');
+
+    const supabase = getSupabase();
+
+    if (clearAll) {
+      if (supabase) {
+        try {
+          await supabase.from('bookings').delete().neq('reference_number', 'NEVER_MATCH');
+        } catch (sbErr) {
+          console.warn('Supabase clear all warning:', sbErr);
+        }
+      }
+      saveBookings([]);
+      return NextResponse.json({ success: true, message: 'All bookings cleared successfully' });
+    }
+
+    if (!id && !ref) {
+      return NextResponse.json({ success: false, error: 'ID or Ref required' }, { status: 400 });
+    }
+
+    if (supabase) {
+      try {
+        if (ref) {
+          await supabase.from('bookings').delete().eq('reference_number', ref);
+        } else if (id) {
+          await supabase.from('bookings').delete().eq('id', id);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase delete booking warning:', sbErr);
+      }
+    }
+
+    const bookings = ensureDataFile();
+    const updated = bookings.filter((b) => (id ? b.id !== id : true) && (ref ? b.ref !== ref : true));
+    saveBookings(updated);
+
+    return NextResponse.json({ success: true, message: 'Booking deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting booking:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Delete failed' }, { status: 500 });
   }
 }
