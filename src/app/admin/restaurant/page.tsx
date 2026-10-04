@@ -532,7 +532,7 @@ export default function AdminRestaurantPage() {
                 <select
                   className="input"
                   value={selectedDrinkCategory}
-                  onChange={(e) => setSelectedDrinkCategory(e.target.value)}
+                  onChange={(e) => setSelectedDrinkCategory(e.target.value as DrinkCategoryKey | 'all')}
                   style={{ width: 'auto', fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
                 >
                   <option value="all">All Drinks ({drinks.length})</option>

@@ -215,14 +215,16 @@ async function saveReceiptToStorage(
 
   // 3. Register in Supabase 'media' table if connected (non-blocking)
   if (supabase && finalUrl && !finalUrl.startsWith('data:')) {
-    supabase.from('media').insert({
-      file_name: fileName,
-      file_url: finalUrl,
-      file_type: mimeType.startsWith('image/') ? 'image' : 'document',
-      file_size: buffer.length,
-      alt_text: `Payment Receipt for Booking ${ref}`,
-      usage_context: 'receipt',
-    }).catch(() => {});
+    Promise.resolve(
+      supabase.from('media').insert({
+        file_name: fileName,
+        file_url: finalUrl,
+        file_type: mimeType.startsWith('image/') ? 'image' : 'document',
+        file_size: buffer.length,
+        alt_text: `Payment Receipt for Booking ${ref}`,
+        usage_context: 'receipt',
+      })
+    ).catch(() => {});
   }
 
   return { receiptUrl: finalUrl, fileName };
