@@ -85,7 +85,7 @@ function BookPageContent() {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOptimizingReceipt, setIsOptimizingReceipt] = useState(false);
-  const [submissionStage, setSubmissionStage] = useState<'idle' | 'securing' | 'receipt' | 'whatsapp'>('idle');
+  const [submissionStage, setSubmissionStage] = useState<'idle' | 'securing' | 'receipt' | 'complete'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load active rooms from local inventory and live server API
@@ -341,33 +341,11 @@ function BookPageContent() {
       console.warn('Could not store to localStorage:', e);
     }
 
-    setSubmissionStage('whatsapp');
+    setSubmissionStage('complete');
     setIsSubmitting(false);
     setIsConfirmed(true);
     setStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // 3. Prepare and open prefilled WhatsApp message with all booking + payment information
-    const whatsappUrl = generateWhatsAppBookingMessage(HOTEL_INFO.whatsappNumber, {
-      reference: ref,
-      guestName: bookingData.fullName,
-      phone: bookingData.phone,
-      whatsapp: bookingData.whatsapp,
-      roomName: selectedRoomData?.name || 'Room',
-      checkIn: bookingData.checkIn,
-      checkOut: bookingData.checkOut,
-      numGuests: bookingData.numGuests,
-      totalAmount,
-      paymentBank: OFFICIAL_BANK_ACCOUNT.bankName,
-      paymentAccountNumber: OFFICIAL_BANK_ACCOUNT.accountNumber,
-      paymentAccountName: OFFICIAL_BANK_ACCOUNT.accountName,
-      hasReceiptUploaded: Boolean(receiptPreview),
-      specialRequests: bookingData.specialRequests,
-    });
-
-    if (typeof window !== 'undefined') {
-      window.open(whatsappUrl, '_blank');
-    }
   };
 
   const getWhatsAppBookingURL = () => {
@@ -1496,9 +1474,9 @@ function BookPageContent() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.35rem' }}>
                     <RefreshCw size={18} className="animate-spin" style={{ color: '#F59E0B' }} />
                     <strong style={{ fontSize: '0.95rem', letterSpacing: '0.2px' }}>
-                      {submissionStage === 'securing' && 'Step 1/3: Reserving room & locking dates...'}
-                      {submissionStage === 'receipt' && 'Step 2/3: Securing payment transfer receipt...'}
-                      {submissionStage === 'whatsapp' && 'Step 3/3: Opening hotel WhatsApp reservation desk...'}
+                      {submissionStage === 'securing' && 'Step 1/2: Reserving room & locking dates...'}
+                      {submissionStage === 'receipt' && 'Step 2/2: Securing payment transfer receipt...'}
+                      {submissionStage === 'complete' && 'Finalizing your booking confirmation...'}
                     </strong>
                   </div>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.85)' }}>
@@ -1540,14 +1518,14 @@ function BookPageContent() {
                       <span>
                         {submissionStage === 'securing' && 'Reserving Room...'}
                         {submissionStage === 'receipt' && 'Securing Receipt...'}
-                        {submissionStage === 'whatsapp' && 'Connecting to WhatsApp...'}
+                        {submissionStage === 'complete' && 'Finalizing...'}
                         {submissionStage === 'idle' && 'Saving & Processing...'}
                       </span>
                     </>
                   ) : (
                     <>
                       <Check size={20} />
-                      <span>Submit Booking &amp; Send to WhatsApp</span>
+                      <span>Submit Booking &amp; View Confirmation</span>
                     </>
                   )}
                 </button>
@@ -1578,12 +1556,13 @@ function BookPageContent() {
               <p
                 style={{
                   color: 'var(--color-text-secondary)',
-                  maxWidth: '520px',
+                  maxWidth: '540px',
                   margin: '0 auto var(--space-xl)',
                   fontSize: '0.95rem',
+                  lineHeight: '1.5',
                 }}
               >
-                Your reservation and payment transfer proof have been saved to our hotel system. Send the prefilled details to our reception on WhatsApp to finalize check-in.
+                Your reservation and payment transfer proof have been successfully registered with our hotel. You can review your booking details below. If you wish to reach our front desk directly on WhatsApp, you may tap the button below.
               </p>
 
               {/* Reference Card */}
@@ -1704,10 +1683,13 @@ function BookPageContent() {
                     fontSize: '1.05rem',
                     padding: '0.9rem 1.5rem',
                     boxShadow: '0 4px 16px rgba(37, 211, 102, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
                   }}
                 >
                   <MessageCircle size={22} />
-                  Open WhatsApp to Confirm Booking
+                  Open WhatsApp to Confirm Booking (Optional)
                 </a>
 
                 <Link href="/" className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }}>
