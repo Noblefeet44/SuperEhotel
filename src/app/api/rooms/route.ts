@@ -52,13 +52,35 @@ function parseAndMergeRooms(parsed: any[]): RoomCategoryData[] {
   return [...merged, ...custom];
 }
 
-function ensureRoomsFile(): RoomCategoryData[] {
-  // 1. Return in-memory cache if available
+async function fetchCloudRooms(): Promise<RoomCategoryData[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const downloadPromise = supabase.storage.from('app-data').download('rooms.json');
+    const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+      setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2500)
+    );
+    const result: any = await Promise.race([downloadPromise, timeoutPromise]);
+    if (result && result.data && typeof result.data.text === 'function') {
+      const text = await result.data.text();
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parseAndMergeRooms(parsed);
+      }
+    }
+  } catch (err) {
+    // Cloud storage read notice
+  }
+  return null;
+}
+
+function readLocalDiskRooms(): RoomCategoryData[] {
+  // 1. Check in-memory cache
   if (serverMemoryRooms && serverMemoryRooms.length > 0) {
     return serverMemoryRooms;
   }
 
-  // 2. Check writable TMP_FILE (for serverless environments)
+  // 2. Check writable TMP_FILE
   try {
     if (fs.existsSync(TMP_FILE)) {
       const raw = fs.readFileSync(TMP_FILE, 'utf8');
@@ -92,7 +114,25 @@ function ensureRoomsFile(): RoomCategoryData[] {
   return INITIAL_ROOMS_DATA;
 }
 
-function saveRooms(rooms: RoomCategoryData[]): boolean {
+async function ensureRoomsFile(): Promise<RoomCategoryData[]> {
+  // 1. Try cloud storage first for multi-device live sync
+  const cloudRooms = await fetchCloudRooms();
+  if (cloudRooms && cloudRooms.length > 0) {
+    serverMemoryRooms = cloudRooms;
+    // Keep local cache synced
+    try {
+      fs.writeFileSync(TMP_FILE, JSON.stringify(cloudRooms, null, 2), 'utf8');
+      if (fs.existsSync(DATA_DIR)) {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(cloudRooms, null, 2), 'utf8');
+      }
+    } catch (_) {}
+    return cloudRooms;
+  }
+
+  return readLocalDiskRooms();
+}
+
+async function saveRooms(rooms: RoomCategoryData[]): Promise<boolean> {
   serverMemoryRooms = rooms;
 
   // Always write to writable /tmp directory (works on Vercel and local)
@@ -112,78 +152,34 @@ function saveRooms(rooms: RoomCategoryData[]): boolean {
     // Expected on read-only serverless filesystems
   }
 
+  // Persist to Supabase Storage app-data bucket
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const payload = Buffer.from(JSON.stringify(rooms, null, 2), 'utf8');
+      await supabase.storage.from('app-data').upload('rooms.json', payload, {
+        contentType: 'application/json',
+        upsert: true,
+      });
+    } catch (sbErr) {
+      console.warn('Supabase app-data save warning:', sbErr);
+    }
+  }
+
   return true;
 }
 
 // GET /api/rooms: Fetch live rooms from server file and Supabase
 export async function GET() {
-  const localRooms = ensureRoomsFile();
-  const supabase = getSupabase();
-
-  if (supabase) {
-    try {
-      const supabasePromise = supabase
-        .from('rooms')
-        .select('*, room_categories(name, slug)')
-        .order('display_order', { ascending: true });
-
-      const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 1000)
-      );
-
-      const { data, error } = await Promise.race([supabasePromise, timeoutPromise]);
-
-      if (!error && data && data.length > 0) {
-        // Merge Supabase data — Supabase is the source of truth for photos.
-        // Use priority match: exact slug wins over -room suffix variant (seed data).
-        const mergedRooms = localRooms.map((local) => {
-          const match =
-            data.find((r: any) => r.slug === local.slug) ||
-            data.find((r: any) => (r.name || '').toLowerCase() === local.name.toLowerCase()) ||
-            data.find((r: any) => r.slug === `${local.slug}-room`);
-
-          if (!match) return local;
-
-          // Supabase photos are authoritative (admin uploads/deletions persist there)
-          let photos = (Array.isArray(match.photos) && match.photos.length > 0)
-            ? match.photos
-            : (local.images && local.images.length > 0 ? local.images : [local.image]);
-
-          if (local.slug === 'deluxe-2') {
-            photos = photos.filter((img: string) => !img.includes('hotel-exterior.jpg'));
-            if (photos.length === 0) {
-              photos = ['/images/deluxe-2.jpg', '/images/deluxe-1.jpg'];
-            }
-          }
-
-          const price = (match.price_per_night && Number(match.price_per_night) >= local.price * 0.7)
-            ? Number(match.price_per_night)
-            : local.price;
-
-          return {
-            ...local,
-            price,
-            image: photos[0],
-            images: photos,
-            status: match.status || local.status || 'available',
-          };
-        });
-
-        return NextResponse.json({ success: true, rooms: mergedRooms });
-      }
-    } catch (err) {
-      console.warn('Supabase rooms query warning:', err);
-    }
-  }
-
-  return NextResponse.json({ success: true, rooms: localRooms });
+  const rooms = await ensureRoomsFile();
+  return NextResponse.json({ success: true, rooms });
 }
 
 // POST /api/rooms: Update or insert room tier (saves to data/rooms.json and Supabase)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const currentRooms = ensureRoomsFile();
+    const currentRooms = await ensureRoomsFile();
 
     // 1. Direct unit status change: { action: 'update_unit_status', roomId, unitId, status }
     if (body.action === 'update_unit_status') {
@@ -196,7 +192,7 @@ export async function POST(request: Request) {
         });
         return { ...r, units: updatedUnits };
       });
-      saveRooms(updatedRooms);
+      await saveRooms(updatedRooms);
       return NextResponse.json({ success: true, message: `Unit updated to ${status}`, rooms: updatedRooms });
     }
 
@@ -208,7 +204,7 @@ export async function POST(request: Request) {
         const updatedUnits = r.units.map((u) => ({ ...u, status }));
         return { ...r, status, units: updatedUnits };
       });
-      saveRooms(updatedRooms);
+      await saveRooms(updatedRooms);
       return NextResponse.json({ success: true, message: `All units marked as ${status}`, rooms: updatedRooms });
     }
 
@@ -219,13 +215,13 @@ export async function POST(request: Request) {
         if (r.id !== roomId && r.slug !== roomId) return r;
         return { ...r, status };
       });
-      saveRooms(updatedRooms);
+      await saveRooms(updatedRooms);
       return NextResponse.json({ success: true, message: `Tier status updated to ${status}`, rooms: updatedRooms });
     }
 
     // 4. Save entire rooms array: { action: 'save_all', rooms }
     if (body.action === 'save_all' && Array.isArray(body.rooms)) {
-      saveRooms(body.rooms);
+      await saveRooms(body.rooms);
       return NextResponse.json({ success: true, message: 'All inventory saved', rooms: body.rooms });
     }
 
@@ -284,7 +280,7 @@ export async function POST(request: Request) {
       updatedRooms = [...currentRooms, roomPayload];
     }
 
-    saveRooms(updatedRooms);
+    await saveRooms(updatedRooms);
 
     // Sync to Supabase — update ALL slug variants so the seed rows stay in sync
     const supabase = getSupabase();
@@ -372,7 +368,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing roomId parameter' }, { status: 400 });
     }
 
-    const currentRooms = ensureRoomsFile();
+    const currentRooms = await ensureRoomsFile();
     const roomIndex = currentRooms.findIndex((r) => r.id === roomId || r.slug === roomId);
 
     if (roomIndex === -1) {
@@ -384,7 +380,7 @@ export async function DELETE(request: Request) {
     // If neither photoUrl nor photoIndex is provided, delete the entire room category
     if (!photoUrl && (photoIndex === null || photoIndex === undefined)) {
       const updatedRooms = currentRooms.filter((r) => r.id !== roomId && r.slug !== roomId);
-      saveRooms(updatedRooms);
+      await saveRooms(updatedRooms);
 
       const supabase = getSupabase();
       if (supabase) {
@@ -429,7 +425,7 @@ export async function DELETE(request: Request) {
     };
 
     const updatedRooms = currentRooms.map((r, i) => (i === roomIndex ? updatedRoom : r));
-    saveRooms(updatedRooms);
+    await saveRooms(updatedRooms);
 
     // Sync to Supabase — update ALL slug variants
     const supabase = getSupabase();

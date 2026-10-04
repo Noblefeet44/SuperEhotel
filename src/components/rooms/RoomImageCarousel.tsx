@@ -33,21 +33,24 @@ export function RoomImageCarousel({
   badge,
   priority = false,
 }: RoomImageCarouselProps) {
-  const [activeImages, setActiveImages] = useState<string[]>(images);
+  const [activeImages, setActiveImages] = useState<string[]>(() => {
+    return Array.isArray(images) && images.length > 0 ? images.filter(Boolean) : [fallbackImage];
+  });
 
   useEffect(() => {
-    setActiveImages(images);
+    if (Array.isArray(images) && images.length > 0) {
+      setActiveImages(images.filter(Boolean));
+    }
   }, [images]);
 
   useEffect(() => {
     const syncImages = () => {
-      const deletedUrls = new Set(getDeletedPhotoUrls());
       if (roomSlug) {
         try {
           const stored = getStoredRoomsData();
           const match = stored.find((r) => r.slug === roomSlug || r.id === roomSlug || `${r.slug}-room` === roomSlug);
           if (match && Array.isArray(match.images) && match.images.length > 0) {
-            let clean = match.images.filter((img) => !deletedUrls.has(img));
+            let clean = match.images.filter(Boolean);
             if (roomSlug === 'deluxe-2') {
               clean = clean.filter((img) => !img.includes('hotel-exterior.jpg'));
             }
@@ -58,26 +61,14 @@ export function RoomImageCarousel({
           }
         } catch (_) {}
       }
-
-      // Filter active images against deleted blacklist
-      setActiveImages((prev) => {
-        let filtered = prev.filter((img) => !deletedUrls.has(img));
-        if (roomSlug === 'deluxe-2') {
-          filtered = filtered.filter((img) => !img.includes('hotel-exterior.jpg'));
-        }
-        return filtered.length > 0 ? filtered : [fallbackImage];
-      });
     };
 
-    syncImages();
     window.addEventListener('super_e_rooms_updated', syncImages);
     return () => window.removeEventListener('super_e_rooms_updated', syncImages);
-  }, [roomSlug, fallbackImage]);
+  }, [roomSlug]);
 
-  // Ensure we always have at least one image
-  const deletedSet = typeof window !== 'undefined' ? new Set(getDeletedPhotoUrls()) : new Set<string>();
-  let cleanActive = (activeImages && activeImages.length > 0 ? activeImages : [fallbackImage])
-    .filter((img) => !deletedSet.has(img));
+  // Ensure we always have at least one valid image
+  let cleanActive = (activeImages && activeImages.length > 0 ? activeImages : [fallbackImage]).filter(Boolean);
   if (roomSlug === 'deluxe-2') {
     cleanActive = cleanActive.filter((img) => !img.includes('hotel-exterior.jpg'));
   }

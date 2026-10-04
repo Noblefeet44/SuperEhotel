@@ -60,36 +60,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
 
-    // Create base64 fallback so upload succeeds 100% of the time on serverless/read-only hosts
-    const mime = file.type || 'image/jpeg';
-    const base64Url = `data:${mime};base64,${buffer.toString('base64')}`;
-    let publicUrl = base64Url;
-
     const timestamp = Date.now();
     const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_');
     const fileName = `${category}_${timestamp}_${safeName}`;
+    const mime = file.type || 'image/jpeg';
 
-    // Try saving locally to public/uploads if filesystem is writable
-    try {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const filePath = path.join(uploadsDir, fileName);
-      fs.writeFileSync(filePath, buffer);
-      publicUrl = `/uploads/${fileName}`;
-    } catch (fsErr) {
-      console.warn('Local uploads disk is read-only (using data URI fallback):', fsErr);
-    }
+    let publicUrl = '';
 
-    // Try uploading to Supabase Storage with 1500ms timeout if credentials are configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // 1. Prioritize uploading to Supabase Storage with 25s timeout
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://abiavsgmbokwyxlahhyt.supabase.co';
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder')) {
       try {
         const supabase = createClient(supabaseUrl, supabaseKey);
-        const bucketName = category === 'rooms' ? 'rooms' : 'media';
+        const bucketName = category === 'receipts' ? 'receipts' : (category === 'rooms' ? 'rooms' : 'media');
 
         const uploadPromise = supabase.storage
           .from(bucketName)
@@ -99,7 +84,7 @@ export async function POST(request: NextRequest) {
           });
 
         const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: new Error('Supabase storage timeout') }), 1500)
+          setTimeout(() => resolve({ data: null, error: new Error('Supabase storage upload timeout') }), 25000)
         );
 
         const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
@@ -112,10 +97,32 @@ export async function POST(request: NextRequest) {
           if (publicUrlData?.publicUrl) {
             publicUrl = publicUrlData.publicUrl;
           }
+        } else if (error) {
+          console.warn('Supabase storage upload error:', error);
         }
       } catch (storageErr) {
-        console.warn('Supabase storage notice (falling back):', storageErr);
+        console.warn('Supabase storage exception (falling back):', storageErr);
       }
+    }
+
+    // 2. Also save locally to public/uploads if filesystem is writable
+    try {
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const filePath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(filePath, buffer);
+      if (!publicUrl) {
+        publicUrl = `/uploads/${fileName}`;
+      }
+    } catch (fsErr) {
+      console.warn('Local uploads disk is read-only:', fsErr);
+    }
+
+    // 3. Fallback to base64 data URI only if both Supabase and disk failed
+    if (!publicUrl) {
+      publicUrl = `data:${mime};base64,${buffer.toString('base64')}`;
     }
 
     return NextResponse.json({

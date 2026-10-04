@@ -95,6 +95,10 @@ export default function AdminMediaPage() {
 
       const res = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+          'X-Admin-Auth': 'true',
+        },
+        credentials: 'include',
         body: formData,
       });
 
@@ -157,24 +161,22 @@ export default function AdminMediaPage() {
           anyRoomChanged = true;
           const filteredImages = (room.images || [room.image]).filter((img) => img !== itemToDelete.url);
           const finalImages = filteredImages.length > 0 ? filteredImages : ['/images/standard-room.jpg'];
-          const newRoom = {
+          return {
             ...room,
             image: finalImages[0],
             images: finalImages,
           };
-
-          // Also trigger server delete
-          fetch(`/api/rooms?roomId=${encodeURIComponent(room.id)}&photoUrl=${encodeURIComponent(itemToDelete.url)}`, {
-            method: 'DELETE',
-          }).catch(() => {});
-
-          return newRoom;
         }
         return room;
       });
 
       if (anyRoomChanged) {
         saveStoredRoomsData(updatedRooms);
+        fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save_all', rooms: updatedRooms }),
+        }).catch((err) => console.warn('Failed to sync updated rooms:', err));
       }
     } catch (err) {
       console.warn('Error removing deleted media from rooms:', err);

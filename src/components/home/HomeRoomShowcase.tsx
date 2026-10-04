@@ -64,6 +64,7 @@ export function HomeRoomShowcase({ initialRooms }: HomeRoomShowcaseProps) {
                 images={roomImages}
                 fallbackImage={room.image || '/images/standard-room.jpg'}
                 roomName={room.name}
+                roomSlug={room.slug}
                 facilities={room.facilities}
                 height="210px"
                 priority={index === 0}

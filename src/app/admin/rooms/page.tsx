@@ -295,24 +295,13 @@ export default function AdminRoomsPage() {
     const files = e.target.files;
     if (!files || files.length === 0 || !editingRoom) return;
 
-    setUploadStatus(`Processing 1 of ${files.length} photos...`);
+    setUploadStatus(`Uploading 1 of ${files.length} photos...`);
     const uploadedUrls: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
       setUploadStatus(`Uploading ${i + 1} of ${files.length} photos...`);
       const file = files[i];
 
-      // Step 1: Compress client-side for zero-fail fallback
-      let clientBase64 = '';
-      try {
-        clientBase64 = await compressImageFile(file);
-      } catch (err) {
-        console.warn('Client compress warning:', err);
-      }
-
-      let finalUrl = clientBase64;
-
-      // Step 2: Try uploading to server endpoint
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -329,14 +318,14 @@ export default function AdminRoomsPage() {
 
         const data = await res.json();
         if (data.success && data.url) {
-          finalUrl = data.url;
+          uploadedUrls.push(data.url);
+        } else {
+          console.warn('API upload response notice:', data.error);
+          alert(data.error || 'Failed to upload photo');
         }
       } catch (err) {
-        console.warn('API upload fallback to high-quality base64:', err);
-      }
-
-      if (finalUrl) {
-        uploadedUrls.push(finalUrl);
+        console.warn('API upload network error:', err);
+        alert('Network error while uploading photo. Please check your connection.');
       }
     }
 
@@ -353,7 +342,7 @@ export default function AdminRoomsPage() {
         images: combined,
       };
       await persistRoomChange(updatedRoom);
-      triggerSaveNotification(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} uploaded and saved!`);
+      triggerSaveNotification(`${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} uploaded and live on website!`);
     }
 
     setUploadStatus(null);
@@ -414,11 +403,6 @@ export default function AdminRoomsPage() {
       return;
     }
 
-    const photoToDelete = currentImgs[index];
-    if (photoToDelete) {
-      markPhotoAsDeleted(photoToDelete);
-    }
-
     const filtered = currentImgs.filter((_, i) => i !== index);
     const updatedRoom: RoomCategoryData = {
       ...editingRoom,
@@ -426,33 +410,8 @@ export default function AdminRoomsPage() {
       images: filtered,
     };
 
-    // 1. Immediately update editingRoom in modal
-    setEditingRoom(updatedRoom);
-
-    // 2. Immediately update rooms in React state
-    const updatedRooms = rooms.map((r) => (r.id === updatedRoom.id || r.slug === updatedRoom.slug ? updatedRoom : r));
-    setRooms(updatedRooms);
-
-    // 3. Immediately persist to localStorage
-    saveStoredRoomsData(updatedRooms);
-    triggerSaveNotification('Photo removed from room');
-
-    // 4. Persist to server via POST and DELETE
-    try {
-      await fetch('/api/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedRoom),
-      });
-
-      if (photoToDelete) {
-        await fetch(`/api/rooms?roomId=${encodeURIComponent(updatedRoom.slug)}&photoUrl=${encodeURIComponent(photoToDelete)}`, {
-          method: 'DELETE',
-        });
-      }
-    } catch (err) {
-      console.warn('Server room sync warning:', err);
-    }
+    await persistRoomChange(updatedRoom);
+    triggerSaveNotification('Photo permanently deleted and removed from carousels');
   };
 
   // Add custom URL image
@@ -1673,6 +1632,7 @@ export default function AdminRoomsPage() {
                             <RoomImageCarousel
                               images={roomImages}
                               roomName={editingRoom.name || 'Room Preview'}
+                              roomSlug={editingRoom.slug}
                               height="180px"
                             />
                           </div>

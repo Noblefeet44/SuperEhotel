@@ -92,29 +92,40 @@ function readLocalRooms(): RoomCategoryData[] {
 }
 
 /**
- * Async version: fetches live photos from Supabase and merges them in.
+ * Async version: fetches live rooms and photos from Supabase Storage app-data and local files.
  * Use this wherever await is possible (server components, generateMetadata, etc.)
  */
 export async function getServerRoomsDataAsync(): Promise<RoomCategoryData[]> {
-  const localRooms = readLocalRooms();
   const supabase = getSupabase();
 
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('slug, name, photos, price_per_night, status')
-        .order('display_order', { ascending: true });
+      const downloadPromise = supabase.storage.from('app-data').download('rooms.json');
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2500)
+      );
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return applySupabasePhotos(localRooms, data);
+      const result: any = await Promise.race([downloadPromise, timeoutPromise]);
+      if (result && result.data && typeof result.data.text === 'function') {
+        const text = await result.data.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Cache locally
+          try {
+            fs.writeFileSync(TMP_FILE, JSON.stringify(parsed, null, 2), 'utf8');
+            if (fs.existsSync(DATA_DIR)) {
+              fs.writeFileSync(DATA_FILE, JSON.stringify(parsed, null, 2), 'utf8');
+            }
+          } catch (_) {}
+          return parsed;
+        }
       }
     } catch (err) {
-      console.warn('server-rooms: Supabase query warning:', err);
+      console.warn('server-rooms: Supabase app-data query warning:', err);
     }
   }
 
-  return localRooms;
+  return readLocalRooms();
 }
 
 /**
