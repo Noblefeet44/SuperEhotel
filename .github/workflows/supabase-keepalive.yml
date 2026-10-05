@@ -1,0 +1,38 @@
+name: Keep Supabase Active 24/7 (Prevent Free Tier Pause)
+
+on:
+  schedule:
+    # Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI anytime
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Database & Keepalive API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Supabase REST API Directly
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://abiavsgmbokwyxlahhyt.supabase.co' }}
+          SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiaWF2c2dtYm9rd3l4bGFoaHl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMDgwODEsImV4cCI6MjEwNjU4NDA4MX0.Yb_8sO0E3ruQJl3lEXe09vomaJOmqdRlc3dT6e3offY' }}
+        run: |
+          echo "Sending keep-alive ping to Supabase REST endpoint..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/rooms?select=id&limit=1")
+          echo "Supabase HTTP Response Code: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+            echo "✅ Supabase is active and healthy! 7-day auto-pause timer reset."
+          else
+            echo "⚠️ Non-200 status received: $HTTP_STATUS"
+          fi
+
+      - name: Ping Website Keepalive Route (Optional)
+        env:
+          SITE_URL: ${{ secrets.PRODUCTION_URL || 'https://superehotel.com' }}
+        run: |
+          echo "Pinging website keepalive endpoint at $SITE_URL/api/bookings/keepalive..."
+          curl -s --max-time 15 "$SITE_URL/api/bookings/keepalive" || echo "Website ping skipped or domain not yet configured."

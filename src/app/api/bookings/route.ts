@@ -201,7 +201,7 @@ async function saveReceiptToStorage(
       };
 
       const timeoutPromise = new Promise<null>((resolve) =>
-        setTimeout(() => resolve(null), 3500)
+        setTimeout(() => resolve(null), 10000)
       );
 
       const remoteUrl = await Promise.race([uploadFn(), timeoutPromise]);
@@ -242,13 +242,6 @@ export async function GET() {
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
-        if (data.length === 0) {
-          // If Supabase has zero bookings, it means the database was reset / has no bookings.
-          // Clear local bookings as well so old test bookings never reappear!
-          saveBookings([]);
-          return NextResponse.json({ success: true, bookings: [] });
-        }
-
         // Query files from 'receipts' bucket to correlate any receipt by reference
         const bucketReceiptMap = new Map<string, string>();
         try {
@@ -325,6 +318,44 @@ export async function GET() {
         const existingRefs = new Set(supabaseBookings.map((b) => b.ref));
         const missingLocal = localBookings.filter((b) => !existingRefs.has(b.ref));
         const merged = [...supabaseBookings, ...missingLocal];
+
+        // Auto-sync any local bookings missing from Supabase back into Supabase
+        if (missingLocal.length > 0) {
+          Promise.all(
+            missingLocal.map(async (lb) => {
+              try {
+                await supabase.from('bookings').insert({
+                  reference_number: lb.ref,
+                  guest_name: lb.guestName,
+                  guest_phone: lb.phone,
+                  guest_whatsapp: lb.whatsapp,
+                  guest_email: lb.email || null,
+                  room_name: lb.roomName,
+                  room_slug: lb.roomSlug || null,
+                  check_in_date: lb.checkIn,
+                  check_out_date: lb.checkOut,
+                  num_guests: lb.numGuests || 1,
+                  total_amount: lb.totalAmount,
+                  booking_status: lb.status,
+                  payment_status: lb.paymentStatus,
+                  payment_method: lb.paymentMethod || 'transfer',
+                  payment_reference: lb.paymentReference || null,
+                  amount_paid: lb.amountPaid,
+                  balance_due: lb.balanceDue,
+                  room_number: lb.roomNumber || null,
+                  is_walk_in: Boolean(lb.isWalkIn),
+                  cashier_name: lb.cashierName || null,
+                  special_requests: lb.specialRequests || null,
+                  admin_notes: lb.adminNotes || null,
+                  receipt_url: lb.receiptImage || '',
+                  receipt_file_name: lb.receiptFileName || '',
+                });
+              } catch (e) {
+                console.warn('Auto-sync to Supabase warning for ref:', lb.ref, e);
+              }
+            })
+          ).catch(() => {});
+        }
 
         // Keep local cache in sync with live receipts
         try {
@@ -532,8 +563,18 @@ export async function POST(request: Request) {
         }
       };
 
-      const syncTimeout = new Promise((resolve) => setTimeout(resolve, 3500));
-      await Promise.race([syncToSupabase(), syncTimeout]);
+      // Allow ample time for Supabase to commit even with cold starts or network latency
+      let timer: NodeJS.Timeout;
+      const syncTimeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Supabase sync reached 15s timeout')), 15000);
+      });
+      try {
+        await Promise.race([syncToSupabase(), syncTimeout]);
+      } catch (raceErr) {
+        console.warn('Supabase booking sync timeout/warning:', raceErr);
+      } finally {
+        clearTimeout(timer!);
+      }
     }
 
     return NextResponse.json({
