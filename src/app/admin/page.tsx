@@ -27,64 +27,58 @@ const sidebarLinks = [
   { href: '/admin/settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 
-const stats = {
-  totalRooms: 4,
-  availableRooms: 3,
-  occupiedRooms: 1,
-  maintenanceRooms: 0,
-  todayCheckIns: 1,
-  todayCheckOuts: 0,
-  upcomingBookings: 3,
-  pendingConfirmations: 2,
-  pendingPayments: 3,
-};
+const STORAGE_KEY_BOOKINGS = 'super_e_admin_bookings_cache';
 
-const recentBookings = [
-  {
-    ref: 'SE-20260811-4521',
-    guest: 'Amina Bello',
-    phone: '08023456789',
-    room: 'Deluxe Room',
-    checkIn: '2026-08-12',
-    checkOut: '2026-08-14',
-    status: 'new',
-    payment: 'not_paid',
-    amount: 80000,
-  },
-  {
-    ref: 'SE-20260810-7834',
-    guest: 'Chidi Okeke',
-    phone: '07031234567',
-    room: 'Executive Room',
-    checkIn: '2026-08-11',
-    checkOut: '2026-08-13',
-    status: 'confirmed',
-    payment: 'paid',
-    amount: 120000,
-  },
-  {
-    ref: 'SE-20260809-2156',
-    guest: 'Fatima Abdullahi',
-    phone: '08098765432',
-    room: 'VIP Luxury Suite',
-    checkIn: '2026-08-10',
-    checkOut: '2026-08-12',
-    status: 'checked_in',
-    payment: 'paid',
-    amount: 200000,
-  },
-  {
-    ref: 'SE-20260808-9362',
-    guest: 'Emmanuel Nwosu',
-    phone: '09045678901',
-    room: 'Standard Room',
-    checkIn: '2026-08-08',
-    checkOut: '2026-08-10',
-    status: 'checked_out',
-    payment: 'paid',
-    amount: 50000,
-  },
-];
+interface DashboardBookingItem {
+  id: string;
+  ref: string;
+  guest: string;
+  phone: string;
+  whatsapp?: string;
+  email?: string;
+  room: string;
+  checkIn: string;
+  checkOut: string;
+  status: string;
+  payment: string;
+  amount: number;
+  isWalkIn?: boolean;
+}
+
+function getCachedBookings(): DashboardBookingItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  try {
+    const guestRaw = localStorage.getItem('super_e_guest_bookings');
+    if (guestRaw) {
+      const parsed = JSON.parse(guestRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((b: any) => ({
+          id: b.id || `guest_${b.ref || Date.now()}`,
+          ref: b.ref,
+          guest: b.guestName || b.guest,
+          phone: b.phone,
+          whatsapp: b.whatsapp || b.phone,
+          email: b.email || '',
+          room: b.roomName || b.room,
+          checkIn: b.checkIn,
+          checkOut: b.checkOut,
+          status: b.status || 'awaiting_confirmation',
+          payment: b.paymentStatus || 'paid',
+          amount: b.totalAmount || b.amount || 0,
+          isWalkIn: false,
+        }));
+      }
+    }
+  } catch {}
+  return [];
+}
 
 const statusColors: Record<string, string> = {
   new: '#3B82F6',
@@ -126,8 +120,37 @@ export default function AdminDashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [roomsData, setRoomsData] = useState(() => getStoredRoomsData());
-  const [liveBookingsCount, setLiveBookingsCount] = useState<number>(recentBookings.length);
-  const [pendingCount, setPendingCount] = useState<number>(stats.pendingConfirmations);
+  const [bookingsList, setBookingsList] = useState<DashboardBookingItem[]>(() => getCachedBookings());
+  const [isConfirmingRef, setIsConfirmingRef] = useState<string | null>(null);
+
+  const refreshBookings = () => {
+    fetch('/api/bookings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.bookings)) {
+          const mapped: DashboardBookingItem[] = data.bookings.map((b: any) => ({
+            id: b.id,
+            ref: b.ref,
+            guest: b.guestName || b.guest,
+            phone: b.phone,
+            whatsapp: b.whatsapp || b.phone,
+            email: b.email || '',
+            room: b.roomName || b.room,
+            checkIn: b.checkIn,
+            checkOut: b.checkOut,
+            status: b.status || 'awaiting_confirmation',
+            payment: b.paymentStatus || 'paid',
+            amount: b.totalAmount || b.amount || 0,
+            isWalkIn: Boolean(b.isWalkIn),
+          }));
+          setBookingsList(mapped);
+          try {
+            localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(mapped));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     const auth = sessionStorage.getItem('admin_authenticated');
@@ -136,22 +159,57 @@ export default function AdminDashboardPage() {
     } else {
       setIsAuthenticated(true);
       setRoomsData(getStoredRoomsData());
+      refreshBookings();
 
-      // Fetch live bookings count
-      fetch('/api/bookings')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success && Array.isArray(data.bookings)) {
-            setLiveBookingsCount(data.bookings.length);
-            const pending = data.bookings.filter(
-              (b: any) => b.status === 'awaiting_confirmation' || b.status === 'new'
-            ).length;
-            setPendingCount(pending);
-          }
-        })
-        .catch(() => {});
+      const onUpdate = () => {
+        setRoomsData(getStoredRoomsData());
+        refreshBookings();
+      };
+      window.addEventListener('super_e_bookings_updated', onUpdate);
+      window.addEventListener('storage', onUpdate);
+      return () => {
+        window.removeEventListener('super_e_bookings_updated', onUpdate);
+        window.removeEventListener('storage', onUpdate);
+      };
     }
   }, [router]);
+
+  const totalBookingsCount = bookingsList.length;
+  const pendingConfirmationsCount = bookingsList.filter(
+    (b) => b.status === 'awaiting_confirmation' || b.status === 'new'
+  ).length;
+  const pendingPaymentsCount = bookingsList.filter(
+    (b) => b.payment === 'not_paid' || b.payment === 'awaiting_payment'
+  ).length;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayCheckInsCount = bookingsList.filter(
+    (b) => (b.checkIn && b.checkIn.slice(0, 10) === todayStr) || b.status === 'checked_in'
+  ).length;
+
+  const handleDirectConfirm = async (booking: DashboardBookingItem) => {
+    setIsConfirmingRef(booking.ref);
+    try {
+      await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: booking.id, ref: booking.ref, status: 'confirmed' }),
+      });
+      setBookingsList((prev) => {
+        const updated = prev.map((b) =>
+          b.ref === booking.ref || b.id === booking.id ? { ...b, status: 'confirmed' } : b
+        );
+        try {
+          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(updated));
+          window.dispatchEvent(new Event('super_e_bookings_updated'));
+        } catch {}
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to confirm booking:', err);
+    } finally {
+      setIsConfirmingRef(null);
+    }
+  };
 
   const totalRooms = roomsData.reduce((acc, r) => acc + r.units.length, 0);
   const availableRooms = roomsData.reduce(
@@ -324,7 +382,7 @@ export default function AdminDashboardPage() {
               <Link href="/admin/bookings" className="app-quick-pill primary">
                 <CalendarCheck size={16} />
                 <span>Check Bookings</span>
-                {pendingCount > 0 && <span className="pill-counter">{pendingCount}</span>}
+                {pendingConfirmationsCount > 0 && <span className="pill-counter">{pendingConfirmationsCount}</span>}
               </Link>
               <Link href="/admin/rooms" className="app-quick-pill">
                 <Bed size={16} />
@@ -348,11 +406,11 @@ export default function AdminDashboardPage() {
               <div className="metric-lbl">Occupied</div>
             </div>
             <div className="mobile-metric-card blue">
-              <div className="metric-val">{liveBookingsCount}</div>
+              <div className="metric-val">{totalBookingsCount}</div>
               <div className="metric-lbl">Total Bookings</div>
             </div>
             <div className="mobile-metric-card amber">
-              <div className="metric-val">{pendingCount}</div>
+              <div className="metric-val">{pendingConfirmationsCount}</div>
               <div className="metric-lbl">Action Needed</div>
             </div>
           </div>
@@ -386,8 +444,8 @@ export default function AdminDashboardPage() {
                   <span className="tile-title">Check Bookings</span>
                   <span className="tile-sub">Verify guest stays &amp; receipts</span>
                 </div>
-                {pendingCount > 0 && (
-                  <span className="tile-badge-counter">{pendingCount} New</span>
+                {pendingConfirmationsCount > 0 && (
+                  <span className="tile-badge-counter">{pendingConfirmationsCount} New</span>
                 )}
               </Link>
 
@@ -587,7 +645,7 @@ export default function AdminDashboardPage() {
             <div className="stat-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <div className="stat-card-value">{stats.todayCheckIns}</div>
+                  <div className="stat-card-value">{todayCheckInsCount}</div>
                   <div className="stat-card-label">Today&apos;s Check-ins</div>
                 </div>
                 <Clock size={24} style={{ color: 'var(--color-primary)', opacity: 0.5 }} />
@@ -597,7 +655,7 @@ export default function AdminDashboardPage() {
             <div className="stat-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <div className="stat-card-value">{liveBookingsCount}</div>
+                  <div className="stat-card-value">{totalBookingsCount}</div>
                   <div className="stat-card-label">Total Bookings</div>
                 </div>
                 <TrendingUp size={24} style={{ color: 'var(--color-primary)', opacity: 0.5 }} />
@@ -608,7 +666,7 @@ export default function AdminDashboardPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div className="stat-card-value" style={{ color: 'var(--color-warning)' }}>
-                    {pendingCount}
+                    {pendingConfirmationsCount}
                   </div>
                   <div className="stat-card-label">Pending Confirmations</div>
                 </div>
@@ -620,7 +678,7 @@ export default function AdminDashboardPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div className="stat-card-value" style={{ color: 'var(--color-destructive)' }}>
-                    {stats.pendingPayments}
+                    {pendingPaymentsCount}
                   </div>
                   <div className="stat-card-label">Pending Payments</div>
                 </div>
@@ -653,181 +711,325 @@ export default function AdminDashboardPage() {
               className="btn btn-outline btn-sm"
               style={{ fontWeight: 700, fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
             >
-              Check All <ChevronRight size={15} />
+              Check All ({totalBookingsCount}) <ChevronRight size={15} />
             </Link>
           </div>
 
-          {/* MOBILE APP-STYLE RECENT BOOKING CARDS */}
-          <div className="admin-mobile-bookings-list">
-            {recentBookings.map((booking) => (
-              <div key={booking.ref} className="admin-mobile-booking-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0F172A' }}>
-                      {booking.guest}
-                    </h4>
-                    <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#64748B' }}>
-                      {booking.ref}
-                    </span>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '0.96rem', fontWeight: 800, color: '#1E3A8A', display: 'block' }}>
-                      {formatPrice(booking.amount)}
-                    </span>
-                    <span
-                      className="badge"
-                      style={{
-                        background: `${statusColors[booking.status]}15`,
-                        color: statusColors[booking.status],
-                        fontSize: '0.65rem',
-                        fontWeight: 700,
-                        padding: '0.15rem 0.45rem',
-                      }}
-                    >
-                      {statusLabels[booking.status]}
-                    </span>
-                  </div>
-                </div>
-
-                <div
+          {bookingsList.length === 0 ? (
+            <div
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '16px',
+                padding: '3rem 1.5rem',
+                textAlign: 'center',
+                border: '1px dashed #CBD5E1',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: '#F1F5F9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1rem',
+                  color: '#64748B',
+                }}
+              >
+                <CalendarCheck size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', marginBottom: '0.4rem' }}>
+                No Bookings in System
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748B', maxWidth: '420px', margin: '0 auto 1.5rem' }}>
+                Ready for new guest reservations! Bookings submitted through the website or front desk walk-ins will appear here immediately.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link
+                  href="/admin/bookings?walkin=true"
+                  className="btn btn-primary"
                   style={{
-                    backgroundColor: '#F8FAFC',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '8px',
-                    fontSize: '0.76rem',
-                    color: '#334155',
-                    marginBottom: '0.65rem',
-                    display: 'flex',
-                    justifyContent: 'space-between',
+                    background: 'linear-gradient(135deg, #16A34A 0%, #15803D 100%)',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '10px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textDecoration: 'none',
                   }}
                 >
-                  <span>
-                    <strong>Room:</strong> {booking.room}
-                  </span>
-                  <span>
-                    {new Date(booking.checkIn).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })} &rarr;{' '}
-                    {new Date(booking.checkOut).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-
-                {/* Quick Action Touch Buttons */}
-                <div style={{ display: 'flex', gap: '0.45rem' }}>
-                  <a
-                    href={`https://wa.me/234${booking.phone.replace(/^0/, '')}?text=${encodeURIComponent(
-                      `Hello ${booking.guest}, this is Super E Luxury Hotel regarding your reservation (${booking.ref}) for ${booking.room}.`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-sm"
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#DCFCE7',
-                      color: '#166534',
-                      border: '1px solid #BBF7D0',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      justifyContent: 'center',
-                      padding: '0.4rem',
-                    }}
-                  >
-                    <MessageCircle size={14} /> WhatsApp
-                  </a>
-
-                  <a
-                    href={`tel:${booking.phone}`}
-                    className="btn btn-sm"
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#EFF6FF',
-                      color: '#1E3A8A',
-                      border: '1px solid #BFDBFE',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      justifyContent: 'center',
-                      padding: '0.4rem',
-                    }}
-                  >
-                    <Phone size={14} /> Call Guest
-                  </a>
-
-                  <Link
-                    href={`/admin/bookings?search=${booking.ref}`}
-                    className="btn btn-sm"
-                    style={{
-                      backgroundColor: '#F1F5F9',
-                      color: '#475569',
-                      border: '1px solid #E2E8F0',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      padding: '0.4rem 0.65rem',
-                    }}
-                  >
-                    Details
-                  </Link>
-                </div>
+                  <UserPlus size={16} /> + New Walk-In
+                </Link>
+                <Link
+                  href="/admin/bookings"
+                  className="btn"
+                  style={{
+                    background: '#F1F5F9',
+                    color: '#334155',
+                    fontWeight: 700,
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '10px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Go to Bookings Folio
+                </Link>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <>
+              {/* MOBILE APP-STYLE RECENT BOOKING CARDS */}
+              <div className="admin-mobile-bookings-list">
+                {bookingsList.slice(0, 10).map((booking) => (
+                  <div key={booking.ref} className="admin-mobile-booking-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0F172A' }}>
+                          {booking.guest}
+                        </h4>
+                        <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#64748B' }}>
+                          {booking.ref}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.96rem', fontWeight: 800, color: '#1E3A8A', display: 'block' }}>
+                          {formatPrice(booking.amount)}
+                        </span>
+                        <span
+                          className="badge"
+                          style={{
+                            background: `${statusColors[booking.status] || '#3B82F6'}15`,
+                            color: statusColors[booking.status] || '#3B82F6',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            padding: '0.15rem 0.45rem',
+                          }}
+                        >
+                          {statusLabels[booking.status] || booking.status}
+                        </span>
+                      </div>
+                    </div>
 
-          {/* DESKTOP RECENT BOOKINGS TABLE (Preserved for Desktop >= 1024px) */}
-          <div className="admin-desktop-view-only" style={{ overflowX: 'auto' }}>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Reference</th>
-                  <th>Guest</th>
-                  <th>Room</th>
-                  <th>Check-in</th>
-                  <th>Check-out</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Payment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentBookings.map((booking) => (
-                  <tr key={booking.ref}>
-                    <td>
-                      <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.8125rem' }}>
-                        {booking.ref}
+                    <div
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '8px',
+                        fontSize: '0.76rem',
+                        color: '#334155',
+                        marginBottom: '0.65rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span>
+                        <strong>Room:</strong> {booking.room}
                       </span>
-                    </td>
-                    <td>{booking.guest}</td>
-                    <td>{booking.room}</td>
-                    <td style={{ fontSize: '0.875rem' }}>
-                      {new Date(booking.checkIn).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}
-                    </td>
-                    <td style={{ fontSize: '0.875rem' }}>
-                      {new Date(booking.checkOut).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{formatPrice(booking.amount)}</td>
-                    <td>
-                      <span
-                        className="badge"
+                      <span>
+                        {booking.checkIn ? new Date(booking.checkIn).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '-'} &rarr;{' '}
+                        {booking.checkOut ? new Date(booking.checkOut).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '-'}
+                      </span>
+                    </div>
+
+                    {/* Quick Action Touch Buttons */}
+                    <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      {(booking.status === 'awaiting_confirmation' || booking.status === 'new') && (
+                        <button
+                          onClick={() => handleDirectConfirm(booking)}
+                          disabled={isConfirmingRef === booking.ref}
+                          className="btn btn-sm"
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#16A34A',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            justifyContent: 'center',
+                            padding: '0.4rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <CheckCircle2 size={14} />
+                          {isConfirmingRef === booking.ref ? 'Confirming...' : 'Confirm'}
+                        </button>
+                      )}
+
+                      {booking.phone && (
+                        <a
+                          href={`https://wa.me/234${booking.phone.replace(/^0/, '')}?text=${encodeURIComponent(
+                            `Hello ${booking.guest}, this is Super E Luxury Hotel regarding your reservation (${booking.ref}) for ${booking.room}.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm"
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#DCFCE7',
+                            color: '#166534',
+                            border: '1px solid #BBF7D0',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            justifyContent: 'center',
+                            padding: '0.4rem',
+                          }}
+                        >
+                          <MessageCircle size={14} /> WhatsApp
+                        </a>
+                      )}
+
+                      {booking.phone && (
+                        <a
+                          href={`tel:${booking.phone}`}
+                          className="btn btn-sm"
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#EFF6FF',
+                            color: '#1E3A8A',
+                            border: '1px solid #BFDBFE',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            justifyContent: 'center',
+                            padding: '0.4rem',
+                          }}
+                        >
+                          <Phone size={14} /> Call
+                        </a>
+                      )}
+
+                      <Link
+                        href={`/admin/bookings?search=${encodeURIComponent(booking.ref)}`}
+                        className="btn btn-sm"
                         style={{
-                          background: `${statusColors[booking.status]}15`,
-                          color: statusColors[booking.status],
+                          backgroundColor: '#F1F5F9',
+                          color: '#475569',
+                          border: '1px solid #E2E8F0',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '0.4rem 0.65rem',
                         }}
                       >
-                        {statusLabels[booking.status]}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="badge"
-                        style={{
-                          background: `${paymentColors[booking.payment]}15`,
-                          color: paymentColors[booking.payment],
-                        }}
-                      >
-                        {paymentLabels[booking.payment]}
-                      </span>
-                    </td>
-                  </tr>
+                        Details
+                      </Link>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* DESKTOP RECENT BOOKINGS TABLE (Preserved for Desktop >= 1024px) */}
+              <div className="admin-desktop-view-only" style={{ overflowX: 'auto' }}>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Reference</th>
+                      <th>Guest</th>
+                      <th>Room</th>
+                      <th>Check-in</th>
+                      <th>Check-out</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Payment</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookingsList.slice(0, 10).map((booking) => (
+                      <tr key={booking.ref}>
+                        <td>
+                          <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                            {booking.ref}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{booking.guest}</div>
+                          {booking.phone && <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{booking.phone}</div>}
+                        </td>
+                        <td>{booking.room}</td>
+                        <td style={{ fontSize: '0.875rem' }}>
+                          {booking.checkIn ? new Date(booking.checkIn).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '-'}
+                        </td>
+                        <td style={{ fontSize: '0.875rem' }}>
+                          {booking.checkOut ? new Date(booking.checkOut).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) : '-'}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{formatPrice(booking.amount)}</td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              background: `${statusColors[booking.status] || '#3B82F6'}15`,
+                              color: statusColors[booking.status] || '#3B82F6',
+                            }}
+                          >
+                            {statusLabels[booking.status] || booking.status}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              background: `${paymentColors[booking.payment] || '#16A34A'}15`,
+                              color: paymentColors[booking.payment] || '#16A34A',
+                            }}
+                          >
+                            {paymentLabels[booking.payment] || booking.payment}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                            {(booking.status === 'awaiting_confirmation' || booking.status === 'new') && (
+                              <button
+                                onClick={() => handleDirectConfirm(booking)}
+                                disabled={isConfirmingRef === booking.ref}
+                                style={{
+                                  background: '#16A34A',
+                                  color: '#FFFFFF',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '0.3rem 0.6rem',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                <CheckCircle2 size={13} />
+                                {isConfirmingRef === booking.ref ? '...' : 'Confirm'}
+                              </button>
+                            )}
+                            <Link
+                              href={`/admin/bookings?search=${encodeURIComponent(booking.ref)}`}
+                              style={{
+                                background: '#F1F5F9',
+                                color: '#475569',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '6px',
+                                padding: '0.3rem 0.6rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                              }}
+                            >
+                              Manage
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Desktop Quick Actions (Preserved for Desktop >= 1024px) */}

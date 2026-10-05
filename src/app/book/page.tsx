@@ -332,11 +332,36 @@ function BookPageContent() {
       console.error('Error saving booking to API:', err);
     }
 
-    // 2. Also save to guest localStorage for offline resilience
+    // 2. Also save to guest & admin localStorage for offline resilience
     try {
       const existing = JSON.parse(localStorage.getItem('super_e_guest_bookings') || '[]');
       existing.unshift(bookingPayload);
       localStorage.setItem('super_e_guest_bookings', JSON.stringify(existing));
+
+      const adminCacheRaw = localStorage.getItem('super_e_admin_bookings_cache');
+      const adminCache = adminCacheRaw ? JSON.parse(adminCacheRaw) : [];
+      const newAdminItem = {
+        id: bookingPayload.ref,
+        ref: bookingPayload.ref,
+        guest: bookingPayload.guestName,
+        phone: bookingPayload.phone,
+        whatsapp: bookingPayload.whatsapp || bookingPayload.phone,
+        email: bookingPayload.email || '',
+        room: bookingPayload.roomName,
+        checkIn: bookingPayload.checkIn,
+        checkOut: bookingPayload.checkOut,
+        guests: bookingPayload.numGuests || 1,
+        status: bookingPayload.status || 'awaiting_confirmation',
+        payment: bookingPayload.paymentStatus || 'paid',
+        amount: bookingPayload.totalAmount || 0,
+        paymentMethod: 'transfer',
+        receiptImage: bookingPayload.receiptImage || '',
+        receiptFileName: bookingPayload.receiptFileName || '',
+        createdAt: bookingPayload.createdAt || new Date().toISOString(),
+      };
+      const filtered = adminCache.filter((b: any) => b.ref !== newAdminItem.ref);
+      localStorage.setItem('super_e_admin_bookings_cache', JSON.stringify([newAdminItem, ...filtered]));
+      window.dispatchEvent(new Event('super_e_bookings_updated'));
     } catch (e) {
       console.warn('Could not store to localStorage:', e);
     }

@@ -88,12 +88,68 @@ interface AdminBookingItem {
   createdAt: string;
 }
 
+const STORAGE_KEY_BOOKINGS = 'super_e_admin_bookings_cache';
+
+function getCachedBookings(): AdminBookingItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  try {
+    const guestRaw = localStorage.getItem('super_e_guest_bookings');
+    if (guestRaw) {
+      const parsed = JSON.parse(guestRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((b: any) => ({
+          id: b.id || `guest_${b.ref || Date.now()}`,
+          ref: b.ref,
+          guest: b.guestName || b.guest,
+          phone: b.phone,
+          whatsapp: b.whatsapp || b.phone,
+          email: b.email || '',
+          room: b.roomName || b.room,
+          checkIn: b.checkIn,
+          checkOut: b.checkOut,
+          guests: b.numGuests || 1,
+          status: b.status || 'awaiting_confirmation',
+          payment: b.paymentStatus || 'paid',
+          amount: b.totalAmount || b.amount || 0,
+          paymentMethod: b.paymentMethod || 'transfer',
+          paymentReference: b.paymentReference || '',
+          amountPaid: b.amountPaid !== undefined ? b.amountPaid : (b.totalAmount || 0),
+          balanceDue: b.balanceDue !== undefined ? b.balanceDue : 0,
+          roomNumber: b.roomNumber || '',
+          isWalkIn: false,
+          receiptImage: b.receiptImage || '',
+          receiptFileName: b.receiptFileName || '',
+          createdAt: b.createdAt || new Date().toISOString(),
+        }));
+      }
+    }
+  } catch {}
+  return [];
+}
+
+function persistBookingsCache(items: AdminBookingItem[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(items));
+    window.dispatchEvent(new Event('super_e_bookings_updated'));
+  } catch (err) {
+    console.warn('Error saving bookings to localStorage:', err);
+  }
+}
+
 export default function AdminBookingsPage() {
   const router = useRouter();
   const [viewTab, setViewTab] = useState<'bookings' | 'receipts'>('bookings');
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [bookingsList, setBookingsList] = useState<AdminBookingItem[]>([]);
+  const [bookingsList, setBookingsList] = useState<AdminBookingItem[]>(() => getCachedBookings());
   const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
   const [receiptModalImage, setReceiptModalImage] = useState<string | null>(null);
   const [modalStatus, setModalStatus] = useState<string>('confirmed');
@@ -264,7 +320,11 @@ export default function AdminBookingsPage() {
         createdAt: new Date().toISOString(),
       };
 
-      setBookingsList((prev) => [newBookingItem, ...prev]);
+      setBookingsList((prev) => {
+        const updated = [newBookingItem, ...prev];
+        persistBookingsCache(updated);
+        return updated;
+      });
       setIsWalkInModalOpen(false);
       setWalkInReceipt(newBookingItem);
       setSaveToast(true);
@@ -351,13 +411,49 @@ export default function AdminBookingsPage() {
             createdAt: b.createdAt || new Date().toISOString(),
           }));
 
-          setBookingsList(mapped);
+          if (mapped.length > 0) {
+            setBookingsList(mapped);
+            persistBookingsCache(mapped);
+          } else {
+            const cached = getCachedBookings();
+            if (cached.length > 0) {
+              setBookingsList(cached);
+              // Background sync cached bookings to server
+              cached.forEach((cb) => {
+                fetch('/api/bookings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ref: cb.ref,
+                    guestName: cb.guest,
+                    phone: cb.phone,
+                    whatsapp: cb.whatsapp,
+                    email: cb.email,
+                    roomName: cb.room,
+                    checkIn: cb.checkIn,
+                    checkOut: cb.checkOut,
+                    numGuests: cb.guests,
+                    totalAmount: cb.amount,
+                    status: cb.status,
+                    paymentStatus: cb.payment,
+                    receiptImage: cb.receiptImage,
+                    isWalkIn: cb.isWalkIn,
+                  }),
+                }).catch(() => {});
+              });
+            } else {
+              setBookingsList([]);
+              persistBookingsCache([]);
+            }
+          }
         } else {
-          setBookingsList([]);
+          const cached = getCachedBookings();
+          setBookingsList(cached);
         }
       } catch (err) {
         console.warn('Live bookings fallback:', err);
-        setBookingsList([]);
+        const cached = getCachedBookings();
+        setBookingsList(cached);
       }
     }
     fetchLiveBookings();
@@ -370,7 +466,11 @@ export default function AdminBookingsPage() {
       await fetch(`/api/bookings?id=${encodeURIComponent(booking.id)}&ref=${encodeURIComponent(booking.ref)}`, {
         method: 'DELETE',
       });
-      setBookingsList((prev) => prev.filter((b) => b.id !== booking.id && b.ref !== booking.ref));
+      setBookingsList((prev) => {
+        const updated = prev.filter((b) => b.id !== booking.id && b.ref !== booking.ref);
+        persistBookingsCache(updated);
+        return updated;
+      });
       if (selectedBooking?.id === booking.id) setSelectedBooking(null);
       setToastMessage('Booking deleted successfully');
       setSaveToast(true);
@@ -391,6 +491,10 @@ export default function AdminBookingsPage() {
         method: 'DELETE',
       });
       setBookingsList([]);
+      persistBookingsCache([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('super_e_guest_bookings');
+      }
       setSelectedBooking(null);
       setToastMessage('All existing bookings cleared!');
       setSaveToast(true);
@@ -420,9 +524,11 @@ export default function AdminBookingsPage() {
         body: JSON.stringify({ id: booking.id, ref: booking.ref, status: newStatus }),
       });
 
-      setBookingsList((prev) =>
-        prev.map((b) => (b.id === booking.id ? { ...b, status: newStatus } : b))
-      );
+      setBookingsList((prev) => {
+        const updated = prev.map((b) => (b.id === booking.id || b.ref === booking.ref ? { ...b, status: newStatus } : b));
+        persistBookingsCache(updated);
+        return updated;
+      });
 
       if (selectedBooking?.id === booking.id) {
         setSelectedBooking((prev) => (prev ? { ...prev, status: newStatus } : null));
@@ -453,13 +559,15 @@ export default function AdminBookingsPage() {
         }),
       });
 
-      setBookingsList((prev) =>
-        prev.map((b) =>
-          b.id === selectedBooking.id
+      setBookingsList((prev) => {
+        const updated = prev.map((b) =>
+          b.id === selectedBooking.id || b.ref === selectedBooking.ref
             ? { ...b, status: modalStatus, payment: modalPayment, adminNotes: modalNotes }
             : b
-        )
-      );
+        );
+        persistBookingsCache(updated);
+        return updated;
+      });
 
       setSelectedBooking(null);
       setSaveToast(true);

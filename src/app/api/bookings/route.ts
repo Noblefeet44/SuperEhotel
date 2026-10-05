@@ -41,11 +41,43 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'bookings.json');
 const TMP_FILE = path.join(os.tmpdir(), 'super-e-bookings.json');
 
+const DEFAULT_SUPABASE_URL = 'https://abiavsgmbokwyxlahhyt.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiaWF2c2dtYm9rd3l4bGFoaHl0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTAwODA4MSwiZXhwIjoyMTA2NTg0MDgxfQ.aE1ghNEm3xN_I0cOpcE7opJLiiX9mlE7P0y3zRDuuMk';
+
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
   if (!url || !key || url.includes('placeholder')) return null;
   return createClient(url, key);
+}
+
+async function syncStorageBookingsBackup(bookings: StoredBooking[]) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  try {
+    const jsonStr = JSON.stringify(bookings, null, 2);
+    const buffer = Buffer.from(jsonStr, 'utf-8');
+    await supabase.storage.from('app-data').upload('bookings.json', buffer, {
+      contentType: 'application/json',
+      upsert: true,
+    });
+  } catch (err) {
+    console.warn('Storage bookings backup warning:', err);
+  }
+}
+
+async function getStorageBookingsBackup(): Promise<StoredBooking[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase.storage.from('app-data').download('bookings.json');
+    if (!error && data) {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
 }
 
 function ensureDataFile(): StoredBooking[] {
@@ -232,6 +264,7 @@ async function saveReceiptToStorage(
 
 export async function GET() {
   const localBookings = ensureDataFile();
+  const storageBookings = await getStorageBookingsBackup();
   const supabase = getSupabase();
 
   if (supabase) {
@@ -263,9 +296,9 @@ export async function GET() {
         }
 
         const supabaseBookings: StoredBooking[] = data.map((b: any) => {
-          const localMatch = localBookings.find(
-            (l) => l.ref === b.reference_number || l.id === b.id
-          );
+          const localMatch =
+            localBookings.find((l) => l.ref === b.reference_number || l.id === b.id) ||
+            storageBookings.find((s) => s.ref === b.reference_number || s.id === b.id);
 
           const receiptImg =
             b.receipt_url ||
@@ -314,15 +347,22 @@ export async function GET() {
           };
         });
 
-        // Merge: add any local bookings that aren't yet in Supabase
+        // Merge: add any storage or local bookings that aren't yet in Supabase DB
         const existingRefs = new Set(supabaseBookings.map((b) => b.ref));
-        const missingLocal = localBookings.filter((b) => !existingRefs.has(b.ref));
-        const merged = [...supabaseBookings, ...missingLocal];
+        const allKnown = [...storageBookings, ...localBookings];
+        const missingFromDb: StoredBooking[] = [];
+        for (const item of allKnown) {
+          if (!existingRefs.has(item.ref)) {
+            existingRefs.add(item.ref);
+            missingFromDb.push(item);
+          }
+        }
+        const merged = [...supabaseBookings, ...missingFromDb];
 
-        // Auto-sync any local bookings missing from Supabase back into Supabase
-        if (missingLocal.length > 0) {
+        // Auto-sync any bookings missing from Supabase back into Supabase DB
+        if (missingFromDb.length > 0) {
           Promise.all(
-            missingLocal.map(async (lb) => {
+            missingFromDb.map(async (lb) => {
               try {
                 await supabase.from('bookings').insert({
                   reference_number: lb.ref,
@@ -357,19 +397,26 @@ export async function GET() {
           ).catch(() => {});
         }
 
-        // Keep local cache in sync with live receipts
+        // Keep local cache & cloud app-data storage in sync
         try {
           saveBookings(merged);
+          syncStorageBookingsBackup(merged);
         } catch {}
 
         return NextResponse.json({ success: true, bookings: merged });
       }
     } catch (err) {
-      console.warn('Supabase bookings query warning (using local):', err);
+      console.warn('Supabase bookings query warning (using storage fallback):', err);
     }
   }
 
-  return NextResponse.json({ success: true, bookings: localBookings });
+  // Fallback: merge storage backup and local file
+  const fallbackMap = new Map<string, StoredBooking>();
+  for (const b of [...storageBookings, ...localBookings]) {
+    fallbackMap.set(b.ref, b);
+  }
+  const fallbackList = Array.from(fallbackMap.values());
+  return NextResponse.json({ success: true, bookings: fallbackList });
 }
 
 export async function POST(request: Request) {
@@ -438,6 +485,7 @@ export async function POST(request: Request) {
     const bookings = ensureDataFile();
     bookings.unshift(newBooking);
     saveBookings(bookings);
+    syncStorageBookingsBackup(bookings);
 
     // 2. Sync to Supabase with resilient fallbacks
     const supabase = getSupabase();
@@ -630,6 +678,7 @@ export async function PATCH(request: NextRequest) {
       if (adminNotes !== undefined) bookings[index].adminNotes = adminNotes;
       if (receiptUrl !== undefined) bookings[index].receiptImage = receiptUrl;
       saveBookings(bookings);
+      syncStorageBookingsBackup(bookings);
     }
 
     return NextResponse.json({
@@ -664,6 +713,7 @@ export async function DELETE(request: NextRequest) {
         }
       }
       saveBookings([]);
+      syncStorageBookingsBackup([]);
       return NextResponse.json({ success: true, message: 'All bookings cleared successfully' });
     }
 
@@ -686,6 +736,7 @@ export async function DELETE(request: NextRequest) {
     const bookings = ensureDataFile();
     const updated = bookings.filter((b) => (id ? b.id !== id : true) && (ref ? b.ref !== ref : true));
     saveBookings(updated);
+    syncStorageBookingsBackup(updated);
 
     return NextResponse.json({ success: true, message: 'Booking deleted successfully' });
   } catch (error: any) {
