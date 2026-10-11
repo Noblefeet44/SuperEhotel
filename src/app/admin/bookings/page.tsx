@@ -96,39 +96,7 @@ function getCachedBookings(): AdminBookingItem[] {
     const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  try {
-    const guestRaw = localStorage.getItem('super_e_guest_bookings');
-    if (guestRaw) {
-      const parsed = JSON.parse(guestRaw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((b: any) => ({
-          id: b.id || `guest_${b.ref || Date.now()}`,
-          ref: b.ref,
-          guest: b.guestName || b.guest,
-          phone: b.phone,
-          whatsapp: b.whatsapp || b.phone,
-          email: b.email || '',
-          room: b.roomName || b.room,
-          checkIn: b.checkIn,
-          checkOut: b.checkOut,
-          guests: b.numGuests || 1,
-          status: b.status || 'awaiting_confirmation',
-          payment: b.paymentStatus || 'paid',
-          amount: b.totalAmount || b.amount || 0,
-          paymentMethod: b.paymentMethod || 'transfer',
-          paymentReference: b.paymentReference || '',
-          amountPaid: b.amountPaid !== undefined ? b.amountPaid : (b.totalAmount || 0),
-          balanceDue: b.balanceDue !== undefined ? b.balanceDue : 0,
-          roomNumber: b.roomNumber || '',
-          isWalkIn: false,
-          receiptImage: b.receiptImage || '',
-          receiptFileName: b.receiptFileName || '',
-          createdAt: b.createdAt || new Date().toISOString(),
-        }));
-      }
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
   return [];
@@ -411,44 +379,11 @@ export default function AdminBookingsPage() {
             createdAt: b.createdAt || new Date().toISOString(),
           }));
 
-          if (mapped.length > 0) {
-            setBookingsList(mapped);
-            persistBookingsCache(mapped);
-          } else {
-            const cached = getCachedBookings();
-            if (cached.length > 0) {
-              setBookingsList(cached);
-              // Background sync cached bookings to server
-              cached.forEach((cb) => {
-                fetch('/api/bookings', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    ref: cb.ref,
-                    guestName: cb.guest,
-                    phone: cb.phone,
-                    whatsapp: cb.whatsapp,
-                    email: cb.email,
-                    roomName: cb.room,
-                    checkIn: cb.checkIn,
-                    checkOut: cb.checkOut,
-                    numGuests: cb.guests,
-                    totalAmount: cb.amount,
-                    status: cb.status,
-                    paymentStatus: cb.payment,
-                    receiptImage: cb.receiptImage,
-                    isWalkIn: cb.isWalkIn,
-                  }),
-                }).catch(() => {});
-              });
-            } else {
-              setBookingsList([]);
-              persistBookingsCache([]);
-            }
-          }
+          setBookingsList(mapped);
+          persistBookingsCache(mapped);
         } else {
-          const cached = getCachedBookings();
-          setBookingsList(cached);
+          setBookingsList([]);
+          persistBookingsCache([]);
         }
       } catch (err) {
         console.warn('Live bookings fallback:', err);

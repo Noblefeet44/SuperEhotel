@@ -9,7 +9,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://supereluxuryhotel.com'),
+  metadataBase: new URL('https://www.supereluxuryhotel.com'),
   title: {
     default: "Super E Luxury Hotel & Suites | Best Hotel in Keffi, Nasarawa State Nigeria",
     template: "%s | Super E Luxury Hotel & Suites Keffi",
@@ -23,6 +23,12 @@ export const metadata: Metadata = {
     ],
     shortcut: "/icon.svg",
     apple: "/images/logo.jpg",
+  },
+  verification: {
+    google: "google5aa8c4b7c3d360a2",
+    other: {
+      "google-site-verification": ["google5aa8c4b7c3d360a2", "google5aa8c4b7c3d360a2.html"],
+    },
   },
   keywords: [
     // Brand keywords
@@ -75,7 +81,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Super E Luxury Hotel & Suites" }],
   alternates: {
-    canonical: 'https://supereluxuryhotel.com',
+    canonical: 'https://www.supereluxuryhotel.com',
   },
   openGraph: {
     title: "Super E Luxury Hotel & Suites | Best Hotel & Event Hall in Keffi",
@@ -84,7 +90,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_NG",
     siteName: "Super E Luxury Hotel & Suites",
-    url: 'https://supereluxuryhotel.com',
+    url: 'https://www.supereluxuryhotel.com',
     images: [
       {
         url: '/images/hotel-exterior.jpg',
@@ -115,17 +121,17 @@ export const metadata: Metadata = {
 
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": ["Hotel", "EventVenue"],
+  "@type": ["Hotel", "LodgingBusiness", "EventVenue"],
   "name": "Super E Luxury Hotel & Suites",
   "alternateName": "Super E Hotel & Event Center Keffi",
   "description": "Best luxury hotel and event center in Keffi, Nasarawa State, Nigeria. 8 luxury room categories from ₦36,000/night, 500-capacity Grand Event Hall with 24/7 power supply, free Wi-Fi, fine Nigerian dining, and VIP Lounge & Bar. Near Nasarawa State University (NSUK).",
-  "url": "https://supereluxuryhotel.com",
+  "url": "https://www.supereluxuryhotel.com",
   "telephone": ["+2347066472533", "+2349072069217"],
   "email": "supereluxuryhotelandsuites@gmail.com",
-  "image": "https://supereluxuryhotel.com/images/hotel-exterior.jpg",
+  "image": "https://www.supereluxuryhotel.com/images/hotel-exterior.jpg",
   "priceRange": "₦36,000 - ₦153,000",
   "currenciesAccepted": "NGN",
-  "paymentAccepted": "Cash, Bank Transfer",
+  "paymentAccepted": "Cash, Bank Transfer, POS",
   "address": {
     "@type": "PostalAddress",
     "streetAddress": "11 Hassan Chiroma Street, Adjacent Alvari Hotel G.R.A",
@@ -211,7 +217,7 @@ const faqJsonLd = {
       "name": "How can I make a reservation?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "You can book online through our website at supereluxuryhotel.com/book, call us at 07066472533 or 09072069217, or message us on WhatsApp."
+        "text": "You can book online through our website at https://www.supereluxuryhotel.com/book, call us at 07066472533 or 09072069217, or message us on WhatsApp."
       }
     }
   ]
@@ -225,6 +231,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="google-site-verification" content="google5aa8c4b7c3d360a2" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

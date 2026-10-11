@@ -33,81 +33,12 @@ export interface HallBooking {
   depositPaid?: number;
 }
 
-const initialHallBookings: HallBooking[] = [
-  {
-    id: 'SE-HALL-8421',
-    createdAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString(),
-    fullName: 'Dr. Fatima Abdullahi',
-    phone: '08034567890',
-    whatsapp: '08034567890',
-    email: 'dr.fatima@nsuk.edu.ng',
-    eventType: 'Conference / Seminar / Workshop',
-    eventDate: '2026-10-18',
-    timeSlot: 'Full Day (8:00 AM – 8:00 PM)',
-    guestCount: '300 – 500 Guests (Auditorium Fit)',
-    packageId: 'full-day-wedding',
-    packageName: 'Grand Wedding & Banquet Package',
-    packagePrice: 280000,
-    addons: [
-      'High-Output PA Sound System & Wireless Mics',
-      'Industrial Air Conditioning Guarantee',
-      'Projector & Large Presentation Screen',
-    ],
-    specialNotes: 'Faculty of Medicine Annual Symposium. Needs podium and wired mic backup.',
-    status: 'confirmed',
-    depositPaid: 200000,
-  },
-  {
-    id: 'SE-HALL-7193',
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    fullName: 'Engr. Kenneth & Blessing Okorie',
-    phone: '08123456789',
-    whatsapp: '08123456789',
-    email: 'k.okorie@apexgroup.ng',
-    eventType: 'Wedding Reception',
-    eventDate: '2026-11-07',
-    timeSlot: 'Full Day (8:00 AM – 8:00 PM)',
-    guestCount: '200 – 300 Guests (Banquet Fit)',
-    packageId: 'full-day-wedding',
-    packageName: 'Grand Wedding & Banquet Package',
-    packagePrice: 280000,
-    addons: [
-      'Stage Mood & Event Lighting Package',
-      'VIP Bridal / Speaker Dressing Room',
-      'Discounted Overnight Hotel Room Block',
-    ],
-    specialNotes: 'Bridal party requires early morning access by 7:30 AM for decorators.',
-    status: 'confirmed',
-    depositPaid: 280000,
-  },
-  {
-    id: 'SE-HALL-6240',
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    fullName: 'Alhaji Musa Garba',
-    phone: '07031122334',
-    whatsapp: '07031122334',
-    email: 'musa.garba@kffgov.ng',
-    eventType: 'Annual General Meeting (AGM)',
-    eventDate: '2026-10-25',
-    timeSlot: 'Morning Session (8:00 AM – 1:00 PM)',
-    guestCount: '100 – 200 Guests',
-    packageId: 'half-day-seminar',
-    packageName: 'Corporate Half-Day Session',
-    packagePrice: 150000,
-    addons: [
-      'High-Output PA Sound System & Wireless Mics',
-      'Industrial Air Conditioning Guarantee',
-    ],
-    specialNotes: 'Needs 150 banquet chairs set in classroom style.',
-    status: 'pending',
-    depositPaid: 0,
-  },
-];
+const initialHallBookings: HallBooking[] = [];
 
 export default function AdminHallPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'bookings' | 'packages' | 'calendar'>('bookings');
-  const [bookings, setBookings] = useState<HallBooking[]>(initialHallBookings);
+  const [bookings, setBookings] = useState<HallBooking[]>([]);
   const [packages, setPackages] = useState<HallPackage[]>(HALL_PACKAGES);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,11 +86,16 @@ export default function AdminHallPage() {
       const storedBookings = localStorage.getItem('super_e_hall_bookings');
       if (storedBookings) {
         const parsed = JSON.parse(storedBookings);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setBookings(parsed);
+        if (Array.isArray(parsed)) {
+          // Clean legacy mock records
+          const cleaned = parsed.filter(
+            (b) => !['SE-HALL-8421', 'SE-HALL-7193', 'SE-HALL-6240'].includes(b.id)
+          );
+          setBookings(cleaned);
+          localStorage.setItem('super_e_hall_bookings', JSON.stringify(cleaned));
         }
       } else {
-        localStorage.setItem('super_e_hall_bookings', JSON.stringify(initialHallBookings));
+        localStorage.setItem('super_e_hall_bookings', JSON.stringify([]));
       }
 
       const storedPackages = localStorage.getItem('super_e_hall_packages');

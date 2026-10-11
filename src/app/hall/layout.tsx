@@ -17,15 +17,15 @@ export const metadata: Metadata = {
     'auditorium keffi',
     'seminar hall keffi',
   ],
-  alternates: { canonical: 'https://supereluxuryhotel.com/hall' },
+  alternates: { canonical: 'https://www.supereluxuryhotel.com/hall' },
   openGraph: {
     title: 'Grand Event & Banquet Hall Booking in Keffi | Super E Luxury Hotel',
     description: 'Premier air-conditioned event hall in Keffi for up to 500 guests. 24/7 uninterrupted power, sound system, stage, and secure parking.',
-    url: 'https://supereluxuryhotel.com/hall',
+    url: 'https://www.supereluxuryhotel.com/hall',
     siteName: 'Super E Luxury Hotel & Suites',
     images: [
       {
-        url: 'https://supereluxuryhotel.com/images/event-hall-banquet.jpg',
+        url: 'https://www.supereluxuryhotel.com/images/event-hall-banquet.jpg',
         width: 1200,
         height: 675,
         alt: 'Super E Luxury Event & Banquet Hall Keffi',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Event Hall & Banquet Center in Keffi | Super E Luxury Hotel',
     description: 'Premier event center for weddings, conferences and corporate galas in Keffi, Nasarawa State. 24/7 power & full AC.',
-    images: ['https://supereluxuryhotel.com/images/event-hall-banquet.jpg'],
+    images: ['https://www.supereluxuryhotel.com/images/event-hall-banquet.jpg'],
   },
 };
 
@@ -47,8 +47,8 @@ const hallJsonLd = {
   '@type': ['EventVenue', 'MeetingRoom'],
   'name': 'Super E Grand Event & Banquet Hall Keffi',
   'description': 'The premier multi-purpose event center and conference banquet hall in Keffi, Nasarawa State. 500-guest capacity, industrial climate control, 24/7 generator power guarantee, acoustic stage, and secure parking.',
-  'url': 'https://supereluxuryhotel.com/hall',
-  'image': 'https://supereluxuryhotel.com/images/event-hall-banquet.jpg',
+  'url': 'https://www.supereluxuryhotel.com/hall',
+  'image': 'https://www.supereluxuryhotel.com/images/event-hall-banquet.jpg',
   'telephone': ['+2347066472533', '+2349072069217'],
   'maximumAttendeeCapacity': 500,
   'priceRange': '₦150,000 - ₦400,000',

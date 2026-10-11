@@ -166,7 +166,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     units: [
       { id: 'std-101', roomNumber: '101', floor: '1st Floor', status: 'available' },
       { id: 'std-102', roomNumber: '102', floor: '1st Floor', status: 'available' },
-      { id: 'std-103', roomNumber: '103', floor: '1st Floor', status: 'occupied' },
+      { id: 'std-103', roomNumber: '103', floor: '1st Floor', status: 'available' },
       { id: 'std-104', roomNumber: '104', floor: '1st Floor', status: 'available' },
     ],
   },
@@ -191,7 +191,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     units: [
       { id: 'dlx-201', roomNumber: '201', floor: '2nd Floor', status: 'available' },
       { id: 'dlx-202', roomNumber: '202', floor: '2nd Floor', status: 'available' },
-      { id: 'dlx-203', roomNumber: '203', floor: '2nd Floor', status: 'booked' },
+      { id: 'dlx-203', roomNumber: '203', floor: '2nd Floor', status: 'available' },
     ],
   },
   {
@@ -215,7 +215,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     units: [
       { id: 'dlx1-204', roomNumber: '204', floor: '2nd Floor', status: 'available' },
       { id: 'dlx1-205', roomNumber: '205', floor: '2nd Floor', status: 'available' },
-      { id: 'dlx1-206', roomNumber: '206', floor: '2nd Floor', status: 'maintenance' },
+      { id: 'dlx1-206', roomNumber: '206', floor: '2nd Floor', status: 'available' },
     ],
   },
   {
@@ -260,7 +260,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     isFeatured: true,
     units: [
       { id: 'lux-301', roomNumber: '301', floor: '3rd Floor', status: 'available' },
-      { id: 'lux-302', roomNumber: '302', floor: '3rd Floor', status: 'occupied' },
+      { id: 'lux-302', roomNumber: '302', floor: '3rd Floor', status: 'available' },
       { id: 'lux-303', roomNumber: '303', floor: '3rd Floor', status: 'available' },
     ],
   },
@@ -307,7 +307,7 @@ export const INITIAL_ROOMS_DATA: RoomCategoryData[] = [
     isFeatured: false,
     units: [
       { id: 'exec1-306', roomNumber: '306', floor: '3rd Floor', status: 'available' },
-      { id: 'exec1-307', roomNumber: '307', floor: '3rd Floor', status: 'booked' },
+      { id: 'exec1-307', roomNumber: '307', floor: '3rd Floor', status: 'available' },
     ],
   },
   {

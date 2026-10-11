@@ -24,11 +24,14 @@ export const metadata: Metadata = {
     'event hall Keffi',
     'VIP lounge Keffi',
   ],
+  alternates: {
+    canonical: 'https://www.supereluxuryhotel.com/facilities',
+  },
   openGraph: {
     title: 'Verified Facilities & Amenities | Super E Luxury Hotel & Suites Keffi',
     description:
       'Take a visual tour of our 24/7 Front Desk, Hygienic Restaurant Kitchen, Guarded Shaded Car Park, and Contemporary Architectural Wing.',
-    url: 'https://super-ehotel.vercel.app/facilities',
+    url: 'https://www.supereluxuryhotel.com/facilities',
     siteName: 'Super E Luxury Hotel & Suites',
     images: [
       {

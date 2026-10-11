@@ -31,11 +31,30 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const room = await getServerRoomBySlugAsync(slug);
   if (!room) return { title: 'Room Not Found | Super E Luxury Hotel' };
 
+  const canonicalUrl = `https://www.supereluxuryhotel.com/rooms/${slug}`;
+
   return {
-    title: `${room.name} — ₦${room.price.toLocaleString()} | Super E Luxury Hotel & Suites Keffi`,
-    description: room.description,
+    title: `${room.name} — ₦${room.price.toLocaleString()}/night | Super E Luxury Hotel Keffi`,
+    description: `${room.name} at Super E Luxury Hotel & Suites Keffi. ₦${room.price.toLocaleString()}/night (includes 10% Service Charge & 7% VAT). ${room.description}`,
+    keywords: [
+      `${room.name} Keffi`,
+      `${room.name} hotel booking`,
+      'hotel rooms in Keffi',
+      'luxury accommodation Keffi',
+      'Super E Luxury Hotel rooms',
+    ],
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
-      title: `${room.name} — Super E Luxury Hotel`,
+      title: `${room.name} — Super E Luxury Hotel Keffi`,
+      description: room.description,
+      url: canonicalUrl,
+      images: [room.image],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${room.name} — Super E Luxury Hotel Keffi`,
       description: room.description,
       images: [room.image],
     },

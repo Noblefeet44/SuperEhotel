@@ -51,30 +51,7 @@ function getCachedBookings(): DashboardBookingItem[] {
     const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {}
-  try {
-    const guestRaw = localStorage.getItem('super_e_guest_bookings');
-    if (guestRaw) {
-      const parsed = JSON.parse(guestRaw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((b: any) => ({
-          id: b.id || `guest_${b.ref || Date.now()}`,
-          ref: b.ref,
-          guest: b.guestName || b.guest,
-          phone: b.phone,
-          whatsapp: b.whatsapp || b.phone,
-          email: b.email || '',
-          room: b.roomName || b.room,
-          checkIn: b.checkIn,
-          checkOut: b.checkOut,
-          status: b.status || 'awaiting_confirmation',
-          payment: b.paymentStatus || 'paid',
-          amount: b.totalAmount || b.amount || 0,
-          isWalkIn: false,
-        }));
-      }
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
   return [];

@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { INITIAL_ROOMS_DATA } from '@/lib/hotel-data'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://supereluxuryhotel.com'
+  const baseUrl = 'https://www.supereluxuryhotel.com'
 
   // Static pages
   const staticPages: MetadataRoute.Sitemap = [

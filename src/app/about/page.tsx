@@ -5,8 +5,24 @@ import { Bed, Utensils, MessageCircle, Star, Shield, Users } from 'lucide-react'
 import { generateWhatsAppURL } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'About Us | Super E Luxury Hotel & Suites',
-  description: 'Learn about Super E Luxury Hotel & Suites in Keffi, Nigeria. Our story, mission, and commitment to exceptional Nigerian hospitality.',
+  title: 'About Us | Super E Luxury Hotel & Suites Keffi',
+  description: 'Learn about Super E Luxury Hotel & Suites in Keffi, Nasarawa State, Nigeria. Our story, mission, world-class amenities, and commitment to exceptional Nigerian hospitality.',
+  keywords: [
+    'about super e hotel',
+    'luxury hotel keffi',
+    'hospitality in keffi nasarawa',
+    'super e hotel story',
+    'best hotel in keffi',
+  ],
+  alternates: {
+    canonical: 'https://www.supereluxuryhotel.com/about',
+  },
+  openGraph: {
+    title: 'About Us | Super E Luxury Hotel & Suites Keffi',
+    description: 'Discover the story behind Keffi’s premier luxury hotel destination.',
+    url: 'https://www.supereluxuryhotel.com/about',
+    images: [{ url: '/images/hotel-exterior.jpg', width: 1200, height: 630, alt: 'Super E Luxury Hotel & Suites Keffi' }],
+  },
 };
 
 export default function AboutPage() {
