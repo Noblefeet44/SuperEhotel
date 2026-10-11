@@ -119,7 +119,7 @@ export default function RestaurantPage() {
   const cartItemCount = Object.values(cart).reduce((a, b) => a + b, 0);
 
   // Form submission & WhatsApp redirect
-  const handleOrderSubmit = (e: React.FormEvent) => {
+  const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
 

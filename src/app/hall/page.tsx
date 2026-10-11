@@ -53,7 +53,7 @@ export default function HallPage() {
     }
   };
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
     if (!fullName.trim() || !phone.trim() || !eventDate) {
