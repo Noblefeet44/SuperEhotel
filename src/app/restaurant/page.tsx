@@ -79,6 +79,7 @@ export default function RestaurantPage() {
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
+    email: '',
     orderType: 'room-service', // 'room-service' | 'table-reservation'
     locationDetails: '', // e.g. "Room 204" or "Table for 4 at 8 PM"
     servingTime: 'ASAP',
@@ -154,6 +155,33 @@ ${itemsText || '• Table Reservation Inquiry\n'}
 💰 *TOTAL AMOUNT ESTIMATE*: ₦${totalAmount.toLocaleString()}
 ${formData.specialNotes ? `📝 *Special Instructions*: ${formData.specialNotes}\n` : ''}----------------------------------------
 Please confirm my meal order and preparation time. Thank you!`;
+
+    const orderItems = Object.entries(cart).map(([name, qty]) => ({
+      name,
+      quantity: qty,
+      price: getItemPrice(name),
+    }));
+
+    // Post to /api/restaurant for DB saving & Resend order confirmation email
+    try {
+      await fetch('/api/restaurant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          phone: formData.phone,
+          email: formData.email,
+          orderType: formData.orderType,
+          locationDetails: formData.locationDetails,
+          servingTime: formData.servingTime,
+          items: orderItems,
+          totalAmount,
+          specialNotes: formData.specialNotes,
+        }),
+      });
+    } catch (apiErr) {
+      console.warn('Restaurant API notice:', apiErr);
+    }
 
     const whatsappUrl = generateWhatsAppURL('09131964939', message);
     setIsSubmitted(true);
@@ -418,6 +446,18 @@ Please confirm my meal order and preparation time. Thank you!`;
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
                   {formErrors.phone && <p className="error-text">{formErrors.phone}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="meal-email" className="label">Email Address (Optional — for digital receipt)</label>
+                  <input
+                    id="meal-email"
+                    type="email"
+                    className="input"
+                    placeholder="e.g. guest@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
                 </div>
 
                 <div>

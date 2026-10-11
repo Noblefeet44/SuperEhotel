@@ -22,8 +22,19 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    try {
+      // Post to contact API to trigger visitor confirmation email & admin alert
+      await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+    } catch (err) {
+      console.warn('Contact API notice:', err);
+    }
     
-    // For now, generate a WhatsApp message with the contact form data
+    // Also generate WhatsApp message as quick-chat option
     const message = `📩 CONTACT FORM — SUPER E LUXURY HOTEL
 
 👤 Name: ${formData.name}
@@ -40,6 +51,7 @@ ${formData.message}`;
     setIsSubmitted(true);
     setFormData({ name: '', email: '', phone: '', message: '' });
   };
+
 
   return (
     <>

@@ -95,6 +95,31 @@ export default function HallPage() {
       console.error('Failed to store hall booking:', err);
     }
 
+    // Call /api/hall to save to Supabase and send Resend confirmation email
+    try {
+      await fetch('/api/hall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ref,
+          fullName,
+          phone,
+          whatsapp,
+          email,
+          eventType,
+          eventDate,
+          timeSlot,
+          guestCount,
+          packageName: selectedPackage.name,
+          packagePrice: selectedPackage.price,
+          selectedAddons,
+          specialNotes,
+        }),
+      });
+    } catch (apiErr) {
+      console.warn('Hall API notice:', apiErr);
+    }
+
     // Format WhatsApp Message
     const waText = `🏛️ *NEW EVENT HALL RESERVATION INQUIRY*
 🏨 *Super E Luxury Hotel & Suites (Keffi)*

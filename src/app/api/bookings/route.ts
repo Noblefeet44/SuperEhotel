@@ -3,6 +3,14 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createClient } from '@supabase/supabase-js';
+import {
+  sendBookingReceivedEmail,
+  sendBookingConfirmedEmail,
+  sendCheckInWelcomeEmail,
+  sendCheckOutThanksEmail,
+  sendBookingCancelledEmail,
+  sendAdminNotificationEmail,
+} from '@/lib/email';
 
 export interface StoredBooking {
   id: string;
@@ -625,6 +633,50 @@ export async function POST(request: Request) {
       }
     }
 
+    // Trigger Guest & Admin Email Notifications via Resend (asynchronous / non-blocking)
+    try {
+      if (newBooking.email) {
+        sendBookingReceivedEmail({
+          ref: newBooking.ref,
+          guestName: newBooking.guestName,
+          email: newBooking.email,
+          phone: newBooking.phone,
+          roomName: newBooking.roomName,
+          checkIn: newBooking.checkIn,
+          checkOut: newBooking.checkOut,
+          nights: newBooking.nights,
+          numGuests: newBooking.numGuests,
+          totalAmount: newBooking.totalAmount,
+          amountPaid: newBooking.amountPaid,
+          balanceDue: newBooking.balanceDue,
+          paymentBank: newBooking.paymentBank,
+          paymentMethod: newBooking.paymentMethod,
+          hasReceipt: Boolean(newBooking.receiptImage),
+          specialRequests: newBooking.specialRequests,
+        }).catch((e) => console.warn('[Resend] Booking received email notification warning:', e));
+      }
+
+      sendAdminNotificationEmail({
+        alertType: 'new_booking',
+        title: `New Reservation: ${newBooking.roomName}`,
+        summary: `${newBooking.guestName} (${newBooking.phone}) submitted a booking for ${newBooking.roomName}.`,
+        reference: newBooking.ref,
+        details: [
+          { label: 'Guest Name', value: newBooking.guestName },
+          { label: 'Phone', value: newBooking.phone },
+          { label: 'Email', value: newBooking.email || 'Not provided' },
+          { label: 'Room', value: newBooking.roomName },
+          { label: 'Check-In', value: newBooking.checkIn },
+          { label: 'Check-Out', value: newBooking.checkOut },
+          { label: 'Duration', value: `${newBooking.nights} night(s)` },
+          { label: 'Total Amount', value: `₦${Number(newBooking.totalAmount).toLocaleString()}` },
+          { label: 'Payment Receipt', value: newBooking.receiptImage ? 'Bank Transfer Uploaded' : 'Pending' },
+        ],
+      }).catch((e) => console.warn('[Resend] Admin booking notification warning:', e));
+    } catch (emailErr) {
+      console.warn('[Resend email non-blocking warning]:', emailErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Booking and payment receipt saved successfully',
@@ -679,6 +731,63 @@ export async function PATCH(request: NextRequest) {
       if (receiptUrl !== undefined) bookings[index].receiptImage = receiptUrl;
       saveBookings(bookings);
       syncStorageBookingsBackup(bookings);
+
+      // Trigger status-specific Resend email notifications
+      const updatedBooking = bookings[index];
+      if (updatedBooking && updatedBooking.email && status) {
+        try {
+          if (status === 'confirmed') {
+            sendBookingConfirmedEmail({
+              ref: updatedBooking.ref,
+              guestName: updatedBooking.guestName,
+              email: updatedBooking.email,
+              phone: updatedBooking.phone,
+              roomName: updatedBooking.roomName,
+              roomNumber: updatedBooking.roomNumber,
+              checkIn: updatedBooking.checkIn,
+              checkOut: updatedBooking.checkOut,
+              nights: updatedBooking.nights,
+              numGuests: updatedBooking.numGuests,
+              totalAmount: updatedBooking.totalAmount,
+              amountPaid: updatedBooking.amountPaid,
+              balanceDue: updatedBooking.balanceDue,
+              paymentMethod: updatedBooking.paymentMethod,
+              specialRequests: updatedBooking.specialRequests,
+              adminNotes: updatedBooking.adminNotes,
+            }).catch((e) => console.warn('[Resend] Booking confirmed email warning:', e));
+          } else if (status === 'checked_in') {
+            sendCheckInWelcomeEmail({
+              ref: updatedBooking.ref,
+              guestName: updatedBooking.guestName,
+              email: updatedBooking.email,
+              roomName: updatedBooking.roomName,
+              roomNumber: updatedBooking.roomNumber,
+              checkOut: updatedBooking.checkOut,
+            }).catch((e) => console.warn('[Resend] Check-in welcome email warning:', e));
+          } else if (status === 'checked_out') {
+            sendCheckOutThanksEmail({
+              ref: updatedBooking.ref,
+              guestName: updatedBooking.guestName,
+              email: updatedBooking.email,
+              roomName: updatedBooking.roomName,
+              nights: updatedBooking.nights,
+            }).catch((e) => console.warn('[Resend] Check-out thanks email warning:', e));
+          } else if (status === 'cancelled') {
+            sendBookingCancelledEmail({
+              ref: updatedBooking.ref,
+              guestName: updatedBooking.guestName,
+              email: updatedBooking.email,
+              roomName: updatedBooking.roomName,
+              checkIn: updatedBooking.checkIn,
+              checkOut: updatedBooking.checkOut,
+              totalAmount: updatedBooking.totalAmount,
+              reason: adminNotes || 'Booking cancelled by hotel reception',
+            }).catch((e) => console.warn('[Resend] Booking cancelled email warning:', e));
+          }
+        } catch (emailErr) {
+          console.warn('[Resend PATCH email warning]:', emailErr);
+        }
+      }
     }
 
     return NextResponse.json({
