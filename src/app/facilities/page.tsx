@@ -104,25 +104,25 @@ const PHOTO_FACILITIES: PhotoFacility[] = [
     ],
   },
   {
-    id: 'restaurant-kitchen',
-    name: 'Gourmet Commercial Kitchen & Food Prep',
-    seoTitle: 'Hygienic Commercial Restaurant Kitchen & Fresh Culinary Food Preparation Center',
+    id: 'executive-restaurant-dining',
+    name: 'Executive Restaurant & Ambient Dining Lounge',
+    seoTitle: 'Super E Luxury Hotel Executive Ambient Restaurant & Fine Dining Lounge in Keffi',
     category: 'Dining & Culinary',
-    badge: 'Food Safety Certified',
-    badgeColor: '#059669',
+    badge: 'Fine Dining & VIP Lounge',
+    badgeColor: '#7C3AED',
     image: '/images/super-e-hotel-commercial-kitchen-restaurant-food-prep-keffi.jpg',
     imageAlt:
-      'Super E Luxury Hotel Hygienic Commercial Restaurant Kitchen and Fresh Food Preparation in Keffi Nasarawa State',
+      'Super E Luxury Hotel Executive Ambient Restaurant, VIP Banquet Draped Tables, and Mood Lit Dining Lounge in Keffi Nasarawa State',
     caption:
-      'State-of-the-art stainless steel commercial kitchen with industrial refrigeration, sterile prep counters, and professional chefs preparing fresh meals.',
+      'Executive ambient dining hall with purple mood lighting, royal satin draped tables, golden eagle centerpieces, and comfortable lounge sofas.',
     description:
-      'Culinary excellence starts with unwavering hygiene. Super E Hotel houses a high-standard commercial kitchen fitted with stainless-steel food preparation counters, commercial deep-freeze refrigeration, high-temperature sanitization, and premium cookware. Our master chefs prepare smoky party jollof rice, pounded yam with rich egusi, fresh catfish pepper soup, and hot continental breakfast dishes delivered straight to your room or dining table.',
+      'Experience elevated dining in our signature ambient restaurant. Featuring royal banquet-dressed tables with gold centerpieces, plush lounge sofas, and soft ambient mood lighting, our dining hall provides an exquisite setting for romantic dinners, business luncheons, family celebrations, and VIP room service dining.',
     highlights: [
-      'Stainless-Steel Food Preparation Stations',
-      'Haier Thermocool Commercial Cold Storage',
-      'Authentic Nigerian & Continental Menu',
-      '24/7 Fast In-Room Dining Delivery',
-      'Strict Food Safety & Sanitation Protocols',
+      'Ambient LED Mood Lighting & Air-Conditioned Comfort',
+      'VIP Draped Banqueting Tables with Golden Centerpieces',
+      'Plush Velvet & Leather Lounge Sofa Seating',
+      'Authentic Nigerian & Continental Culinary Menu',
+      'Fast Table Service & 24/7 In-Room Dining Delivery',
     ],
   },
   {

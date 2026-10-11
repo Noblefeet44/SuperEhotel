@@ -36,7 +36,7 @@ const initialMediaItems: MediaItem[] = [
   { id: '13', name: 'VIP Lounge & Bar', url: '/images/vip-lounge-bar.jpg', size: '903 KB', category: 'Lounge' },
   { id: '14', name: 'Club Nightlife', url: '/images/club-nightlife.jpg', size: '928 KB', category: 'Lounge' },
   { id: '15', name: '24/7 Front Desk Reception & Cashier', url: '/images/super-e-hotel-front-desk-reception-cashier-keffi.jpg', size: '157 KB', category: 'Facilities' },
-  { id: '16', name: 'Commercial Restaurant Kitchen Food Prep', url: '/images/super-e-hotel-commercial-kitchen-restaurant-food-prep-keffi.jpg', size: '132 KB', category: 'Facilities' },
+  { id: '16', name: 'Executive Restaurant & Ambient Dining Lounge', url: '/images/super-e-hotel-commercial-kitchen-restaurant-food-prep-keffi.jpg', size: '124 KB', category: 'Facilities' },
   { id: '17', name: 'Secure Shaded Car Parking Lot', url: '/images/super-e-hotel-secure-car-parking-lot-compound-keffi.jpg', size: '120 KB', category: 'Facilities' },
   { id: '18', name: 'Grand Entrance Chandelier Lobby Facade', url: '/images/super-e-hotel-entrance-lobby-facade-keffi.jpg', size: '127 KB', category: 'Facilities' },
   { id: '19', name: 'Modern Architectural Glass Wing & Fountain', url: '/images/super-e-hotel-glass-architecture-water-fountain-keffi.jpg', size: '133 KB', category: 'Facilities' },

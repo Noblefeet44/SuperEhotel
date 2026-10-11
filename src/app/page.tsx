@@ -176,7 +176,7 @@ export default function HomePage() {
               <div style={{ position: 'relative', height: '190px', width: '100%' }}>
                 <Image
                   src="/images/super-e-hotel-commercial-kitchen-restaurant-food-prep-keffi.jpg"
-                  alt="Super E Luxury Hotel Commercial Restaurant Kitchen and Food Prep in Keffi"
+                  alt="Super E Luxury Hotel Executive Ambient Restaurant and VIP Dining Lounge in Keffi"
                   fill
                   style={{ objectFit: 'cover' }}
                   sizes="(max-width: 768px) 100vw, 33vw"
@@ -184,9 +184,9 @@ export default function HomePage() {
               </div>
               <div style={{ padding: 'var(--space-lg)' }}>
                 <span className="badge badge-accent" style={{ marginBottom: '0.4rem', fontSize: '0.7rem' }}>Dining &amp; Culinary</span>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.4rem' }}>Gourmet Commercial Kitchen</h3>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.4rem' }}>Executive Dining &amp; Lounge</h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                  Hygienic stainless-steel culinary prep stations preparing fresh Nigerian favorites and hot room service dining.
+                  Ambient fine dining hall with royal draped tables, VIP lounge seating, and authentic culinary specialties.
                 </p>
               </div>
             </div>
